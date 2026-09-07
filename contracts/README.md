@@ -35,7 +35,9 @@ Method surface, storage shape, and state machine are locked in [IMPLEMENTATION_P
 | File (Phase 1+) | Role |
 |---|---|
 | `halt_module.py` | Registry, bonded reports, adjudication, halt/unhalt |
-| `demo_vault.py` | Opt-in vault gated by `is_action_allowed` |
+| `demo_vault.py` | Opt-in vault gated by `is_action_allowed(..., "withdraw")` |
+
+**Demo Vault action string:** `withdraw` is hardcoded in the vault. Register the protocol with `"withdraw"` in `protected_actions` and **not** in `allowed_while_halted`, or the demo gate will not match.
 
 ## Lint / test (after contracts exist)
 
@@ -44,6 +46,7 @@ python3.12 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 genvm-lint check halt_module.py
+genvm-lint check demo_vault.py
 cd .. && pytest tests/direct/ -v
 ```
 
@@ -59,3 +62,12 @@ cd .. && pytest tests/direct/ -v
 **Halt gate:** While `ACTIVE`, all actions allowed. While `HALTED`, only actions in `allowed_while_halted` return `true` (typos/unknown → `false`).
 
 Case IDs are **1-indexed** so `active_case_id == 0` means none.
+
+## Phase 3 surface (`demo_vault.py`)
+
+| Method | Notes |
+|---|---|
+| `__init__(halt_module, protocol_id)` | Coerce address; `protocol_id >= 0` |
+| `deposit()` | Payable; credits sender balance; **not** halt-gated |
+| `withdraw(amount)` | View-calls halt `is_action_allowed(pid, "withdraw")`; debit; `emit_transfer` |
+| `get_balance(address)` / `get_config()` | Views; address coercion on balance lookup |
