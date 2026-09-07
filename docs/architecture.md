@@ -14,6 +14,8 @@ Autonomous protocols need a kill switch that is not a trusted multisig theater. 
 6. Opt-in **Demo Vault** calls `is_action_allowed(protocol_id, "withdraw")` and refuses withdraw while halted.
 7. Governor **request_unhalt** with remediation evidence; validators must clear before **ACTIVE** resumes.
 
+**Halt gate:** `ACTIVE` → all actions allowed. `HALTED` → fail-closed; only `allowed_while_halted` actions permitted (unknown/typos denied).
+
 ## Layers
 
 ```

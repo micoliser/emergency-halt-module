@@ -1,7 +1,10 @@
 # Studionet only — localnet is not used in this project.
+# Direct-mode tests (pytest) do not need funded accounts.
+# For Studio smoke / gltest network runs, add studionet accounts here.
 networks:
   default: studionet
   studionet:
     url: https://studio.genlayer.com/api
-    # Fund accounts via Studio UI faucet (💧) for payable/bond flows.
-    accounts: []
+
+paths:
+  contracts: contracts

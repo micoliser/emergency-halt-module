@@ -44,5 +44,18 @@ python3.12 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 genvm-lint check halt_module.py
-pytest ../tests/direct/ -v
+cd .. && pytest tests/direct/ -v
 ```
+
+## Phase 1–2 surface (`halt_module.py`)
+
+| Method | Notes |
+|---|---|
+| `register_protocol(...)` | Caller = governor; domains normalized; `allowed_while_halted_json` (may be `[]`); no overlap with protected |
+| `report_exploit(...)` | Payable exact bond; majority D3 aggregation; refund/slash via `_Recipient.emit_transfer` |
+| `request_unhalt(...)` | Governor only; remediation majority |
+| Views | counts, get/list protocols & cases, `is_action_allowed` (fail-closed when HALTED) |
+
+**Halt gate:** While `ACTIVE`, all actions allowed. While `HALTED`, only actions in `allowed_while_halted` return `true` (typos/unknown → `false`).
+
+Case IDs are **1-indexed** so `active_case_id == 0` means none.

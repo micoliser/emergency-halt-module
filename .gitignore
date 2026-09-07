@@ -33,6 +33,8 @@ dist/
 
 # GenLayer / local artifacts
 .genlayer/
+artifacts/
+**/artifacts/
 *.log
 
 # Django
