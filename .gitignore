@@ -1,0 +1,47 @@
+# Python
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+dist/
+*.tsbuildinfo
+
+# Env & secrets
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+*.swp
+*~
+
+# GenLayer / local artifacts
+.genlayer/
+*.log
+
+# Django
+staticfiles/
+media/
+db.sqlite3
+
+# Deploy notes with real secrets (keep notes.md tracked; ignore local overlays)
+deploy/notes.local.md
+
+# Local planning (not part of public repo)
+IMPLEMENTATION_PLAN.md
