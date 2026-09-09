@@ -11,6 +11,7 @@ const NAV = [
   { href: "/protocols", label: "Protocols" },
   { href: "/protocols/register", label: "Register" },
   { href: "/vault", label: "Demo Vault" },
+  { href: "/guide", label: "Guide" },
 ];
 
 function navActive(pathname: string, href: string): boolean {

@@ -144,7 +144,12 @@ export default function VaultPage() {
         <h1 className="text-2xl font-semibold">Demo Vault</h1>
         <p className="text-sm text-muted">
           Deposit GEN anytime. Withdrawals are frozen while the linked protocol is
-          halted — that is the safety demo.
+          halted, that is the safety demo. This page talks to one vault address,
+          a newly registered protocol needs its own deploy. See the{" "}
+          <Link href="/guide" className="text-accent underline-offset-2 hover:underline">
+            developer guide
+          </Link>
+          .
         </p>
       </div>
 

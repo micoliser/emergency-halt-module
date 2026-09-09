@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAccount } from "wagmi";
 import { TxStatus } from "@/components/TxStatus";
@@ -140,7 +141,12 @@ export default function RegisterProtocolPage() {
         <h1 className="text-2xl font-semibold">Register a protocol</h1>
         <p className="text-sm text-muted">
           You become the owner. Anyone can later post a bonded exploit report; if
-          validators agree, protected actions pause until you lift the halt.
+          validators agree, protected actions pause until you lift the halt. This
+          does not deploy a vault, see the{" "}
+          <Link href="/guide" className="text-accent underline-offset-2 hover:underline">
+            developer guide
+          </Link>{" "}
+          to wire a contract to the new protocol id.
         </p>
       </div>
 
