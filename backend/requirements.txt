@@ -1,0 +1,16 @@
+# Backend (thin indexer) runtime deps — Python 3.12
+Django>=5.2,<5.3
+djangorestframework>=3.15,<3.17
+django-cors-headers>=4.4,<5
+dj-database-url>=2.2,<4
+psycopg[binary]>=3.2,<4
+celery[redis]>=5.4,<6
+redis>=5.0,<7
+requests>=2.32,<3
+python-dotenv>=1.0,<2
+gunicorn>=23.0,<24
+whitenoise>=6.7,<7
+
+# GenLayer Python SDK — used for calldata encode/decode against studionet
+# JSON-RPC (`gen_call`). See IMPLEMENTATION_PLAN.md §15 D4.
+genlayer-py>=0.16,<0.17

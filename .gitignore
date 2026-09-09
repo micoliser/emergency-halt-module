@@ -41,6 +41,11 @@ artifacts/
 staticfiles/
 media/
 db.sqlite3
+*.sqlite3
+
+# Celery
+celerybeat-schedule*
+celerybeat.pid
 
 # Deploy notes with real secrets (keep notes.md tracked; ignore local overlays)
 deploy/notes.local.md

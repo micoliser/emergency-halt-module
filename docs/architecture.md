@@ -44,6 +44,24 @@ GenLayer (studionet)
 ACTIVE ──(exploit=true)──► HALTED ──(remediated=true)──► ACTIVE
 ```
 
+## Indexer API
+
+The backend mirrors the contract's view methods and nothing else. Reads are
+paginated with `offset`/`limit` (capped at the contract's page limit); u256
+amounts cross the wire as decimal strings.
+
+| Route | Purpose |
+|---|---|
+| `GET /api/health` | DB + chain config + sync cursor freshness |
+| `GET /api/protocols` · `/api/protocols/<id>` | Registry list / detail |
+| `GET /api/protocols/<id>/cases` | Cases for one protocol |
+| `GET /api/cases` · `/api/cases/<id>` | Reports list / detail with verdict |
+| `POST /api/sync/protocols/<id>` | Fast-path resync right after a wallet tx |
+
+A Celery beat task polls the count anchors every 30s and diffs; the fast-path
+POST runs the same reads inline so a fresh halt is visible immediately. Full
+route and response shapes: [backend/README.md](../backend/README.md).
+
 ## Trust model
 
 | On-chain (deterministic) | AI-judged (nondet) |
