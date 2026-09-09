@@ -33,7 +33,11 @@ def test_fast_path_shows_halted_immediately_after_a_report(client, patched_reade
 
     # And the plain read endpoints agree without another sync.
     assert client.get("/api/protocols/0").json()["status"] == "HALTED"
-    assert client.get("/api/cases/1").json()["status"] == "ACCEPTED_HALT"
+    case = client.get("/api/cases/1").json()
+    assert case["status"] == "ACCEPTED_HALT"
+    assert case["bond_settled"] is False
+    assert len(case["events"]) == 1
+    assert case["events"][0]["event_type"] == "REPORT_EVALUATED"
 
 
 def test_fast_path_creates_a_protocol_the_indexer_had_never_seen(client, patched_reader):
@@ -57,7 +61,15 @@ def test_fast_path_reflects_unhalt(client, patched_reader):
 
     assert body["protocol"]["status"] == "ACTIVE"
     assert body["protocol"]["active_case"] is None
-    assert client.get("/api/cases/1").json()["status"] == "CLEARED"
+    case = client.get("/api/cases/1").json()
+    assert case["status"] == "CLEARED"
+    assert case["verdict_summary"] == "Active exploit confirmed"
+    assert "Unhalt:" not in case["verdict_summary"]
+    assert len(case["events"]) == 2
+    assert [row["event_type"] for row in case["events"]] == [
+        "REPORT_EVALUATED",
+        "UNHALT_EVALUATED",
+    ]
 
 
 def test_fast_path_for_an_unregistered_protocol_is_404(client, patched_reader):

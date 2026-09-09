@@ -12,6 +12,7 @@ from helpers import (
     TRUSTED_DOMAIN,
     MultiContractHost,
     mock_exploit_true,
+    mock_overturn_true,
     register_default_protocol,
 )
 
@@ -142,3 +143,51 @@ def test_get_balance_address_coercion(vault_stack, direct_vm, direct_accounts):
     assert int(vault.get_balance(hex_no_prefix)) == 77
     assert int(vault.get_balance(int(hex_no_prefix, 16))) == 77
     assert int(vault.get_balance(user_bytes)) == 77
+
+
+def test_withdraw_restored_after_overturn(vault_stack, direct_vm, direct_accounts):
+    """T18 / Phase C: halt blocks withdraw; successful overturn restores it."""
+    _host, halt, vault, _pid = vault_stack
+    user = direct_accounts[1]
+    reporter = direct_accounts[2]
+    challenger = direct_accounts[3]
+
+    direct_vm.sender = user
+    direct_vm.value = 1000
+    vault.deposit()
+    direct_vm.value = 0
+
+    mock_exploit_true(direct_vm)
+    direct_vm.sender = reporter
+    direct_vm.value = DEFAULT_BOND
+    halt.report_exploit(
+        0,
+        "Active drain observed",
+        json.dumps([f"https://{TRUSTED_DOMAIN}/incident"]),
+    )
+    direct_vm.value = 0
+
+    assert halt.get_protocol(0)["status"] == "HALTED"
+    direct_vm.sender = user
+    with pytest.raises(Exception):
+        vault.withdraw(100)
+    assert int(vault.get_balance(user)) == 1000
+
+    mock_overturn_true(direct_vm)
+    direct_vm.sender = challenger
+    direct_vm.value = DEFAULT_BOND
+    ok = halt.challenge_halt(
+        0,
+        "Halt was a false alarm; no active exploit",
+        json.dumps([f"https://{TRUSTED_DOMAIN}/overturn"]),
+    )
+    assert ok is True
+    direct_vm.value = 0
+
+    assert halt.get_protocol(0)["status"] == "ACTIVE"
+    assert halt.get_case(1)["status"] == "OVERTURNED"
+    assert halt.is_action_allowed(0, "withdraw") is True
+
+    direct_vm.sender = user
+    vault.withdraw(100)
+    assert int(vault.get_balance(user)) == 900

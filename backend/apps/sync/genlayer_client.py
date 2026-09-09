@@ -171,11 +171,17 @@ class HaltModuleReader:
     def get_case_count(self) -> int:
         return int(self.call_view("get_case_count") or 0)
 
+    def get_case_event_count(self) -> int:
+        return int(self.call_view("get_case_event_count") or 0)
+
     def get_protocol(self, protocol_id: int) -> dict:
         return _as_dict(self.call_view("get_protocol", [int(protocol_id)]))
 
     def get_case(self, case_id: int) -> dict:
         return _as_dict(self.call_view("get_case", [int(case_id)]))
+
+    def get_case_event(self, event_id: int) -> dict:
+        return _as_dict(self.call_view("get_case_event", [int(event_id)]))
 
     def list_protocols(self, offset: int, limit: int) -> list[dict]:
         return _as_dicts(self.call_view("list_protocols", [int(offset), int(limit)]))
@@ -187,6 +193,13 @@ class HaltModuleReader:
         return _as_dicts(
             self.call_view(
                 "list_protocol_cases", [int(protocol_id), int(offset), int(limit)]
+            )
+        )
+
+    def list_case_events(self, case_id: int, offset: int, limit: int) -> list[dict]:
+        return _as_dicts(
+            self.call_view(
+                "list_case_events", [int(case_id), int(offset), int(limit)]
             )
         )
 

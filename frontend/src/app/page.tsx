@@ -22,7 +22,7 @@ const LOOP = [
   },
   {
     title: "Linked apps freeze",
-    body: "If they agree, the protocol is halted. Opt-in contracts refuse protected actions (the Demo Vault blocks withdraw) until the owner proves the fix.",
+    body: "If they agree, the protocol is halted. Opt-in contracts refuse protected actions (the Demo Vault blocks withdraw) until an authority proves the fix — or anyone challenges a bad halt in time.",
   },
 ];
 
@@ -35,7 +35,7 @@ const PILLARS = [
   {
     kicker: "Skin in the game",
     title: "Bonded reports",
-    body: "Reporters put GEN on the line. A rejected report is slashed to the owner. A halt that sticks returns the bond. Griefing is expensive.",
+    body: "One stake size B covers report, challenge, and unhalt. A rejected report pays the owner. A failed challenge pays the reporter. A failed unhalt burns B.",
   },
   {
     kicker: "Opt-in",
@@ -47,11 +47,11 @@ const PILLARS = [
 const ROLES = [
   {
     who: "Anyone",
-    does: "Report an exploit with a bond and a public evidence URL. Watch protocol status and cases.",
+    does: "Report an exploit with a bond and a public evidence URL. Challenge a bad halt while the window is open. Watch the incident timeline.",
   },
   {
     who: "Owner (governor)",
-    does: "Register the protocol, set the safety rules, and lift a halt only after validators accept remediation evidence.",
+    does: "Register the protocol, name backup unhalters, and lift a halt only after validators accept remediation evidence.",
   },
   {
     who: "App developer",
@@ -64,7 +64,7 @@ const DEMO = [
   "Deposit in the Demo Vault, then withdraw once while the protocol is active.",
   "File a bonded report with a public evidence page.",
   "When validators agree, withdrawals freeze. Deposits still work.",
-  "The owner posts proof the issue is fixed. After a yes vote, withdraw works again.",
+  "The owner or a named backup posts proof the issue is fixed (or anyone challenges a bad halt). After a yes vote, withdraw works again.",
 ];
 
 export default function HomePage() {
@@ -88,7 +88,8 @@ export default function HomePage() {
             Autonomous protocols still need a kill switch when funds are being drained.
             This is an opt-in safety layer: bonded public reports, on-chain AI
             judgment, and a freeze of the actions you marked as dangerous until
-            the owner proves the issue is fixed.
+            an owner or backup proves the issue is fixed. Every consensus step
+            lands on the incident timeline.
           </p>
           <div className="flex flex-wrap gap-3 pt-1">
             <Link
@@ -193,7 +194,7 @@ export default function HomePage() {
               </tr>
               <tr>
                 <td className="py-3 text-muted">Lift the halt</td>
-                <td className="py-3 text-right">Owner + validator yes on a fix</td>
+                <td className="py-3 text-right">Owner or backup + validator yes on a fix</td>
               </tr>
             </tbody>
           </table>

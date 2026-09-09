@@ -120,6 +120,24 @@ def test_0x_prefixed_results_decode():
     assert reader.get_case_count() == 7
 
 
+def test_case_event_views_decode():
+    event = {"id": 1, "event_type": "REPORT_EVALUATED", "bond_disposition": "ESCROWED"}
+    reader, session = _reader(
+        [
+            FakeResponse(_encoded(3)),
+            FakeResponse(_encoded(event)),
+            FakeResponse(_encoded([event])),
+        ]
+    )
+
+    assert reader.get_case_event_count() == 3
+    assert reader.get_case_event(1) == event
+    assert reader.list_case_events(1, 0, 20) == [event]
+    assert "get_case_event_count" in bytes.fromhex(
+        session.requests[0]["json"]["params"][0]["data"][2:]
+    ).decode("latin-1")
+
+
 def test_contract_revert_raises_contract_call_error():
     reader, _ = _reader(
         [

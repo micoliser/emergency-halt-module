@@ -2,11 +2,11 @@
 
 import pytest
 
-from apps.cases.models import Case
+from apps.cases.models import Case, CaseEvent
 from apps.protocols.models import Protocol
 from apps.sync import indexer
 from apps.sync.models import SyncCursor
-from tests.fakes import GOVERNOR, ONE_GEN, REPORTER
+from tests.fakes import BACKUP, GOVERNOR, ONE_GEN, REPORTER
 
 pytestmark = pytest.mark.django_db
 
@@ -33,6 +33,10 @@ def test_sync_protocol_maps_every_abi_field(chain):
     assert protocol.config["protected_actions"] == ["withdraw", "transfer"]
     assert protocol.config["allowed_while_halted"] == ["deposit"]
     assert protocol.config["min_evidence"] == 2
+    assert protocol.backup_unhalters == []
+    assert protocol.halted_at is None
+    assert protocol.config["backup_unhalters"] == []
+    assert protocol.config["halted_at_unix"] == 0
     assert protocol.chain_created_at is not None
     # u256 bonds must not land in `raw` as a JS-lossy number.
     assert protocol.raw["reporter_bond"] == str(ONE_GEN)
@@ -58,6 +62,9 @@ def test_fast_path_sync_mirrors_halt_and_case(chain):
     assert case.verdict_summary == "Drain confirmed on-chain"
     assert case.reporter == REPORTER
     assert case.bond_amount == str(ONE_GEN)
+    assert case.bond_settled is False
+    assert protocol.halted_at is not None
+    assert CaseEvent.objects.filter(case=case).count() == 1
 
 
 def test_rejected_report_leaves_protocol_active(chain):
@@ -83,7 +90,16 @@ def test_unhalt_is_mirrored_back_to_active_and_cleared(chain):
     protocol = Protocol.objects.get(onchain_id=0)
     assert protocol.status == "ACTIVE"
     assert protocol.active_case_id == 0
-    assert Case.objects.get(onchain_id=case_id).status == "CLEARED"
+    assert protocol.halted_at is None
+    case = Case.objects.get(onchain_id=case_id)
+    assert case.status == "CLEARED"
+    assert case.verdict_summary == "Active exploit confirmed"
+    assert "Unhalt:" not in case.verdict_summary
+    events = list(CaseEvent.objects.filter(case=case).order_by("onchain_id"))
+    assert len(events) == 2
+    assert events[0].event_type == "REPORT_EVALUATED"
+    assert events[1].event_type == "UNHALT_EVALUATED"
+    assert events[0].consensus_summary != events[1].consensus_summary
 
 
 def test_unchanged_chain_state_is_not_reported_as_an_update(chain):
@@ -135,6 +151,7 @@ def test_poll_and_diff_pages_in_everything_and_updates_cursor(chain):
     cursor = SyncCursor.load()
     assert cursor.protocol_count == 3
     assert cursor.case_count == 2
+    assert cursor.case_event_count == 2
     assert cursor.last_success_at is not None
     assert cursor.last_error == ""
 
@@ -175,3 +192,60 @@ def test_page_limit_is_capped_at_the_contract_maximum(settings, chain):
     indexer.sync_protocols_page(0, reader=chain)
 
     assert ("list_protocols", (0, 50)) in chain.calls
+
+
+def test_event_sync_is_idempotent(chain):
+    chain.register_protocol()
+    chain.report_exploit(0, exploit=True)
+    indexer.poll_and_diff(reader=chain)
+    assert CaseEvent.objects.count() == 1
+    pk = CaseEvent.objects.get().pk
+
+    indexer.poll_and_diff(reader=chain)
+
+    assert CaseEvent.objects.count() == 1
+    assert CaseEvent.objects.get().pk == pk
+
+
+def test_sync_registers_backup_unhalters(chain):
+    chain.register_protocol(backup_unhalters=[BACKUP])
+    indexer.sync_protocol(0, reader=chain)
+
+    protocol = Protocol.objects.get(onchain_id=0)
+    assert protocol.backup_unhalters == [BACKUP]
+
+
+def test_poll_and_diff_indexes_finalize_without_status_change(chain):
+    chain.register_protocol()
+    chain.report_exploit(0, exploit=True)
+    indexer.poll_and_diff(reader=chain)
+    assert Case.objects.get(onchain_id=1).bond_settled is False
+
+    chain.finalize_appeal(0)
+    indexer.poll_and_diff(reader=chain)
+
+    protocol = Protocol.objects.get(onchain_id=0)
+    assert protocol.status == "HALTED"
+    case = Case.objects.get(onchain_id=1)
+    assert case.bond_settled is True
+    assert case.status == "ACCEPTED_HALT"
+    types = list(
+        CaseEvent.objects.filter(case=case)
+        .order_by("onchain_id")
+        .values_list("event_type", flat=True)
+    )
+    assert types == ["REPORT_EVALUATED", "APPEAL_FINALIZED"]
+    assert CaseEvent.objects.get(event_type="APPEAL_FINALIZED").bond_disposition == (
+        "REFUND_REPORTER"
+    )
+
+
+def test_window_zero_halt_refunds_reporter_immediately(chain):
+    chain.register_protocol(appeal_window_seconds=0)
+    chain.report_exploit(0, exploit=True)
+    indexer.sync_protocol(0, reader=chain)
+
+    case = Case.objects.get(onchain_id=1)
+    assert case.bond_settled is True
+    event = CaseEvent.objects.get(case=case)
+    assert event.bond_disposition == "REFUND_ACTOR"

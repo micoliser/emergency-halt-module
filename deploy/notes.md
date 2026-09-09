@@ -14,12 +14,12 @@
 
 **Localnet:** Not used. Docker/WSL localnet is out of scope for this project.
 
-## Contract addresses (fill after deploy)
+## Contract addresses (this demo)
 
-| Contract | Address | Deployed at | Notes |
-|---|---|---|---|
-| Halt Module | _TBD_ | | Deploy first |
-| Demo Vault | _TBD_ | | Ctor: `(halt_module_address, protocol_id)` e.g. `(0x…, 0)` |
+| Contract | Address | Notes |
+|---|---|---|
+| Halt Module | `0x125431c66F877424Dd4db6315fC30079C933B124` | Deploy first |
+| Demo Vault | `0x7d27628a35171c9DE6F6684252a3e2500A7E856D` | Ctor: Halt Module + protocol id (this vault uses `0`) |
 
 ## Deploy order
 

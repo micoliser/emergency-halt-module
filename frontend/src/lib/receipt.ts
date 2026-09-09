@@ -119,6 +119,14 @@ export function humanizeTxError(err: unknown): string {
   if (lower.includes("insufficient funds") || lower.includes("exceeds the balance")) {
     return "Not enough GEN. Fund your wallet from the Studio faucet (💧).";
   }
+  if (
+    lower.includes("must send exactly") ||
+    lower.includes("as reporter bond") ||
+    lower.includes("as challenge bond") ||
+    lower.includes("as unhalt bond")
+  ) {
+    return "Wrong bond amount. Report, challenge, and unhalt all require exactly the protocol stake B.";
+  }
   if (lower.includes("withdraw blocked") || lower.includes("not allowed")) {
     return "Withdrawal is paused while this protocol is halted. Your balance was not changed.";
   }

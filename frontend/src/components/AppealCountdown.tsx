@@ -1,0 +1,53 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { formatDuration, formatTimestamp, msUntil } from "@/lib/format";
+
+export function AppealCountdown({
+  appealEndsAt,
+}: {
+  appealEndsAt: string | null | undefined;
+}) {
+  const [now, setNow] = useState<number | null>(null);
+
+  useEffect(() => {
+    setNow(Date.now());
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  if (!appealEndsAt) {
+    return <p className="text-sm text-muted">No challenge window on record.</p>;
+  }
+  if (now == null) {
+    return (
+      <p className="text-sm text-muted">
+        Challenge deadline {formatTimestamp(appealEndsAt)}
+      </p>
+    );
+  }
+
+  const remaining = msUntil(appealEndsAt, now);
+  if (remaining == null) {
+    return <p className="text-sm text-muted">No challenge window on record.</p>;
+  }
+
+  const open = remaining > 0;
+  return (
+    <div className="space-y-1 text-sm">
+      <p>
+        {open ? (
+          <>
+            Challenge window closes in{" "}
+            <span className="font-mono text-ink">{formatDuration(remaining)}</span>
+          </>
+        ) : (
+          <span>Challenge window is closed.</span>
+        )}
+      </p>
+      <p className="text-xs text-muted">
+        Deadline {formatTimestamp(appealEndsAt)} (chain time from the indexer)
+      </p>
+    </div>
+  );
+}

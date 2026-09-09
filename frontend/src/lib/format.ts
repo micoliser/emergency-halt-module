@@ -37,6 +37,59 @@ export function sameAddress(a?: string | null, b?: string | null): boolean {
   return a.toLowerCase() === b.toLowerCase();
 }
 
+export function isEthAddress(value: string): boolean {
+  return /^0x[a-fA-F0-9]{40}$/.test(value.trim());
+}
+
+/** Governor or a named backup may request unhalt. */
+export function isUnhaltAuthority(
+  wallet?: string | null,
+  protocol?: { governor: string; backup_unhalters?: string[] } | null,
+): boolean {
+  if (!wallet || !protocol) return false;
+  if (sameAddress(wallet, protocol.governor)) return true;
+  return (protocol.backup_unhalters ?? []).some((addr) => sameAddress(wallet, addr));
+}
+
+/** Exact wei for payable report / challenge / unhalt. Do not parseGen this string. */
+export function bondWei(reporterBond: string | null | undefined): bigint {
+  if (reporterBond == null || reporterBond === "") {
+    throw new Error("Could not read the required bond amount.");
+  }
+  return BigInt(reporterBond);
+}
+
+/** End boundary comes from the API; `now` is the client clock for display ticks. */
+export function msUntil(iso: string | null | undefined, now = Date.now()): number | null {
+  if (!iso) return null;
+  const end = new Date(iso).getTime();
+  if (Number.isNaN(end)) return null;
+  return end - now;
+}
+
+export function isAppealWindowOpen(
+  appealEndsAt?: string | null,
+  now = Date.now(),
+): boolean {
+  const remaining = msUntil(appealEndsAt, now);
+  return remaining != null && remaining > 0;
+}
+
+export function formatDuration(ms: number): string {
+  if (ms <= 0) return "0s";
+  const total = Math.floor(ms / 1000);
+  const days = Math.floor(total / 86400);
+  const hours = Math.floor((total % 86400) / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const seconds = total % 60;
+  const parts: string[] = [];
+  if (days) parts.push(`${days}d`);
+  if (hours || days) parts.push(`${hours}h`);
+  if (minutes || hours || days) parts.push(`${minutes}m`);
+  parts.push(`${seconds}s`);
+  return parts.join(" ");
+}
+
 export function formatTimestamp(value: string | null | undefined): string {
   if (!value) return "—";
   const date = new Date(value);

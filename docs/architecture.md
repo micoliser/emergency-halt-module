@@ -68,6 +68,8 @@ route and response shapes: [backend/README.md](../backend/README.md).
 |---|---|
 | Registration, bonds, status, `is_action_allowed`, vault balances | Whether fetched evidence proves an active exploit / remediation |
 
+**Fail-closed on LLM garbage:** missing JSON, a non-boolean `exploit` / `remediated`, or failed consensus raises `UserError`. The protocol stays **ACTIVE**. We do not halt on unparseable leader output.
+
 **Limit:** AI judges **page content** on allowlisted domains, not cryptographic exploit proofs. Bonds, trusted domains, and (P1) challenges are the mitigations.
 
 ## Consensus
@@ -96,4 +98,4 @@ Outbound GEN uses Covenant Escrow’s pattern: `_Recipient(addr).emit_transfer(v
 
 **Studionet only** (RPC `https://studio.genlayer.com/api`, chain id `61999`). Localnet is out of scope for this environment.
 
-See [IMPLEMENTATION_PLAN.md](../IMPLEMENTATION_PLAN.md) for ABI freeze, phases, and milestones.
+See [README.md](../README.md) and [SECURITY.md](SECURITY.md) for setup, honesty, and limitations.

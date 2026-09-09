@@ -10,6 +10,7 @@ class SyncCursor(models.Model):
     id = models.PositiveSmallIntegerField(primary_key=True, default=SINGLETON_ID)
     protocol_count = models.PositiveIntegerField(default=0)
     case_count = models.PositiveIntegerField(default=0)
+    case_event_count = models.PositiveIntegerField(default=0)
     last_run_at = models.DateTimeField(null=True, blank=True)
     last_success_at = models.DateTimeField(null=True, blank=True)
     last_error = models.TextField(blank=True, default="")
@@ -22,7 +23,7 @@ class SyncCursor(models.Model):
     def __str__(self) -> str:
         return (
             f"cursor protocols={self.protocol_count} cases={self.case_count} "
-            f"last_success={self.last_success_at}"
+            f"events={self.case_event_count} last_success={self.last_success_at}"
         )
 
     def save(self, *args, **kwargs):

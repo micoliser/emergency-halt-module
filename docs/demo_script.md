@@ -3,8 +3,8 @@
 Studionet only: chain id **61999**, RPC `https://studio.genlayer.com/api`,
 Studio `https://studio.genlayer.com`, faucet 💧 in the Studio UI.
 
-Contract addresses live in [`deploy/notes.md`](../deploy/notes.md) (still `_TBD_`
-until deploy). Put them in `frontend/.env.local` and `backend/.env`.
+Contract addresses live in [`deploy/notes.md`](../deploy/notes.md). Put them in
+`frontend/.env.local` and `backend/.env`.
 
 **Evidence URLs must be public.** Validators cannot fetch `localhost`. Use
 [rentry.co](https://rentry.co) (or, after Vercel, `https://<app>.vercel.app/evidence/*.html`

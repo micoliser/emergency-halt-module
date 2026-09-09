@@ -24,11 +24,15 @@ class Protocol(models.Model):
     exploit_definition = models.TextField(blank=True)
 
     # trusted_domains / protected_actions / allowed_while_halted /
-    # min_evidence / appeal_window_seconds
+    # min_evidence / appeal_window_seconds / backup_unhalters copy / halted_at_unix
     config = models.JSONField(default=dict, blank=True)
 
     # u256 — decimal string so JS clients never lose precision.
     reporter_bond = models.CharField(max_length=80, default="0")
+
+    # Dedicated columns for v1.1 views (also mirrored inside `config` + `raw`).
+    backup_unhalters = models.JSONField(default=list, blank=True)
+    halted_at = models.DateTimeField(null=True, blank=True)
 
     active_case_id = models.PositiveBigIntegerField(default=0)
     onchain_case_count = models.PositiveIntegerField(default=0)

@@ -1,24 +1,57 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useAccount } from "wagmi";
+import { AppealCountdown } from "@/components/AppealCountdown";
+import { CaseTimeline } from "@/components/CaseTimeline";
 import { StatusBadge } from "@/components/StatusBadge";
-import { Card } from "@/components/ui";
-import { getCase } from "@/lib/api";
-import { formatTimestamp, shortAddress } from "@/lib/format";
+import { TxStatus } from "@/components/TxStatus";
+import { Card, Field, PrimaryButton, TextArea } from "@/components/ui";
+import { useHasMounted } from "@/hooks/useHasMounted";
+import { useNow } from "@/hooks/useNow";
+import { useTransaction } from "@/hooks/useTransaction";
+import { getCase, getProtocol } from "@/lib/api";
+import { contractsConfigured, publicEnv } from "@/lib/env";
+import {
+  bondWei,
+  csvToList,
+  formatTimestamp,
+  isAppealWindowOpen,
+  isUnhaltAuthority,
+  shortAddress,
+} from "@/lib/format";
+import { WRITE_METHODS } from "@/lib/genlayer/client";
 import { ApiError } from "@/lib/types";
 
 export default function CaseDetailPage() {
   const params = useParams<{ id: string }>();
   const id = Number(params.id);
   const invalid = !Number.isInteger(id) || id < 1;
+  const qc = useQueryClient();
+  const mounted = useHasMounted();
+  const { address, isConnected } = useAccount();
+  const challengeTx = useTransaction();
+  const finalizeTx = useTransaction();
 
   const q = useQuery({
     queryKey: ["case", id],
     queryFn: () => getCase(id),
     enabled: !invalid,
   });
+  const protocolQ = useQuery({
+    queryKey: ["protocol", q.data?.protocol_id],
+    queryFn: () => getProtocol(q.data!.protocol_id),
+    enabled: q.data != null,
+  });
+
+  const [statement, setStatement] = useState("");
+  const [urls, setUrls] = useState("");
+  const [challengeError, setChallengeError] = useState<string | null>(null);
+  const [finalizeError, setFinalizeError] = useState<string | null>(null);
+  const now = useNow(true);
 
   if (invalid) {
     return <p className="text-halted">Invalid incident.</p>;
@@ -39,12 +72,109 @@ export default function CaseDetailPage() {
   const c = q.data;
   if (!c) return null;
 
-  const exploitLabel =
-    c.verdict_exploit === true
-      ? "Validators agreed there was an active exploit"
-      : c.verdict_exploit === false
-        ? "Validators did not find an active exploit"
-        : "No verdict yet";
+  const p = protocolQ.data;
+  const halted = p ? p.status === "HALTED" || p.is_halted : c.protocol?.status === "HALTED";
+  const windowOpen = now != null && isAppealWindowOpen(p?.appeal_ends_at, now);
+  const windowClosed =
+    now != null && p?.appeal_ends_at != null && !isAppealWindowOpen(p.appeal_ends_at, now);
+  const isAuthority = isUnhaltAuthority(address, p);
+  const canChallenge =
+    halted && c.status === "ACCEPTED_HALT" && windowOpen && Boolean(p);
+  const canFinalize =
+    halted &&
+    c.status === "ACCEPTED_HALT" &&
+    windowClosed &&
+    c.bond_settled === false &&
+    Boolean(p);
+  const canUnhalt = halted && isAuthority && Boolean(p);
+
+  const invalidateAfterWrite = async () => {
+    await qc.invalidateQueries({ queryKey: ["case", c.id] });
+    await qc.invalidateQueries({ queryKey: ["protocol", c.protocol_id] });
+    await qc.invalidateQueries({ queryKey: ["protocol-cases", c.protocol_id] });
+  };
+
+  const onChallenge = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setChallengeError(null);
+    if (!p) return;
+    if (!contractsConfigured()) {
+      setChallengeError("Contracts are not configured yet.");
+      return;
+    }
+    if (!isConnected) {
+      setChallengeError("Connect MetaMask first.");
+      return;
+    }
+    if (!canChallenge) {
+      setChallengeError("Challenges are only accepted while the halt window is open.");
+      return;
+    }
+    const evidence = csvToList(urls.replace(/\n/g, ","));
+    if (!statement.trim() || evidence.length === 0) {
+      setChallengeError("Explain why the halt is wrong and add at least one evidence link.");
+      return;
+    }
+    if (evidence.length < p.min_evidence) {
+      setChallengeError(`Add at least ${p.min_evidence} evidence link(s).`);
+      return;
+    }
+
+    let value: bigint;
+    try {
+      value = bondWei(p.reporter_bond);
+    } catch {
+      setChallengeError("Could not read the required bond amount.");
+      return;
+    }
+
+    await challengeTx.execute(
+      publicEnv.haltModuleAddress,
+      WRITE_METHODS.challengeHalt,
+      [p.id, statement.trim(), JSON.stringify(evidence)],
+      {
+        value,
+        confirmingMessage: `Confirm in MetaMask — send exactly ${p.reporter_bond_gen} GEN…`,
+        submittedMessage: "Challenge submitted. Waiting for confirmation…",
+        reviewingMessage: "Validators are reviewing the challenge… this can take a minute.",
+        confirmedMessage: "Challenge finished. Check the timeline for the outcome.",
+        syncProtocolId: p.id,
+        onConfirmed: async ({ protocol }) => {
+          if (protocol) qc.setQueryData(["protocol", p.id], protocol);
+          await invalidateAfterWrite();
+        },
+      },
+    );
+  };
+
+  const onFinalize = async () => {
+    setFinalizeError(null);
+    if (!p) return;
+    if (!contractsConfigured()) {
+      setFinalizeError("Contracts are not configured yet.");
+      return;
+    }
+    if (!isConnected) {
+      setFinalizeError("Connect MetaMask first.");
+      return;
+    }
+    await finalizeTx.execute(
+      publicEnv.haltModuleAddress,
+      WRITE_METHODS.finalizeAppeal,
+      [p.id],
+      {
+        confirmingMessage: "Confirm finalize in MetaMask…",
+        submittedMessage: "Finalize submitted…",
+        confirmedMessage:
+          "Escrow released to the reporter. The protocol stays halted until an authority unhalts.",
+        syncProtocolId: p.id,
+        onConfirmed: async ({ protocol }) => {
+          if (protocol) qc.setQueryData(["protocol", p.id], protocol);
+          await invalidateAfterWrite();
+        },
+      },
+    );
+  };
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -56,7 +186,7 @@ export default function CaseDetailPage() {
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="text-2xl font-semibold">Incident report</h1>
         <StatusBadge status={c.status} />
-        {c.protocol && <StatusBadge status={c.protocol.status} />}
+        {(p || c.protocol) && <StatusBadge status={p?.status || c.protocol.status} />}
       </div>
 
       <Card className="space-y-4 text-sm">
@@ -66,46 +196,141 @@ export default function CaseDetailPage() {
           </h2>
           <p className="mt-1 whitespace-pre-wrap">{c.allegation}</p>
         </div>
-        <div>
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">
-            Decision
-          </h2>
-          <p className="mt-1">{exploitLabel}</p>
-          <p className="mt-2 whitespace-pre-wrap text-muted">
-            {c.verdict_summary || "—"}
-          </p>
-        </div>
         <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-2">
           <dt className="text-muted">Reporter</dt>
           <dd>{shortAddress(c.reporter, 6)}</dd>
           <dt className="text-muted">Bond</dt>
           <dd>
             {c.bond_amount_gen} GEN
-            {c.bond_settled ? " (settled)" : " (pending)"}
+            {c.bond_settled ? " (settled)" : " (escrowed)"}
           </dd>
           <dt className="text-muted">Submitted</dt>
           <dd>{formatTimestamp(c.submitted_at)}</dd>
         </dl>
-        <div>
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">
-            Evidence
-          </h2>
-          <ul className="mt-1 space-y-1">
-            {c.evidence_urls.map((url) => (
-              <li key={url}>
-                <a
-                  href={url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="break-all text-xs text-accent hover:underline"
-                >
-                  {url}
-                </a>
-              </li>
-            ))}
-          </ul>
-        </div>
+        {c.evidence_urls.length > 0 && (
+          <div>
+            <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">
+              Report evidence
+            </h2>
+            <ul className="mt-1 space-y-1">
+              {c.evidence_urls.map((url) => (
+                <li key={url}>
+                  <a
+                    href={url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="break-all text-xs text-accent hover:underline"
+                  >
+                    {url}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </Card>
+
+      {halted && p && (
+        <Card className="space-y-3">
+          <AppealCountdown appealEndsAt={p.appeal_ends_at} />
+          <div className="flex flex-wrap gap-2">
+            {canUnhalt && (
+              <Link
+                href={`/protocols/${p.id}/unhalt`}
+                className="rounded-sm bg-accent px-4 py-2 text-sm font-semibold text-accent-ink"
+              >
+                Lift halt
+              </Link>
+            )}
+            {canChallenge && (
+              <a
+                href="#challenge"
+                className="rounded-sm border border-line px-4 py-2 text-sm hover:bg-bg-card"
+              >
+                Challenge halt
+              </a>
+            )}
+          </div>
+        </Card>
+      )}
+
+      <Card className="space-y-4">
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">
+          Incident timeline
+        </h2>
+        <CaseTimeline events={c.events ?? []} />
+      </Card>
+
+      {canChallenge && p && (
+        <Card id="challenge" className="scroll-mt-24 space-y-4">
+          <div>
+            <h2 className="text-lg font-semibold">Challenge this halt</h2>
+            <p className="mt-1 text-sm text-muted">
+              Send exactly {p.reporter_bond_gen} GEN. If validators agree the halt was
+              wrong, the protocol becomes active again. If they disagree, this stake
+              pays the reporter and the halt stands.
+            </p>
+          </div>
+          <form className="space-y-4" onSubmit={onChallenge}>
+            <Field label="Why should this halt be overturned?">
+              <TextArea
+                value={statement}
+                onChange={(e) => setStatement(e.target.value)}
+                placeholder="The evidence does not show an active exploit. The halt should be overturned."
+                maxLength={2000}
+                required
+              />
+            </Field>
+            <Field
+              label="Evidence links"
+              hint={`Public https links on a trusted website (${p.trusted_domains.join(", ") || "this protocol’s allowlist"}).`}
+            >
+              <TextArea
+                value={urls}
+                onChange={(e) => setUrls(e.target.value)}
+                placeholder="https://rentry.co/your-challenge-page"
+                required
+              />
+            </Field>
+            <TxStatus
+              phase={challengeTx.txPhase}
+              error={challengeTx.error || challengeError}
+              txHash={challengeTx.txHash}
+              reviewing
+            />
+            <PrimaryButton
+              type="submit"
+              disabled={!mounted || challengeTx.isLocked}
+            >
+              {challengeTx.isLocked
+                ? "Working…"
+                : `Submit challenge (${p.reporter_bond_gen} GEN)`}
+            </PrimaryButton>
+          </form>
+        </Card>
+      )}
+
+      {canFinalize && p && (
+        <Card id="finalize" className="scroll-mt-24 space-y-3">
+          <h2 className="text-lg font-semibold">Release reporter escrow</h2>
+          <p className="text-sm text-muted">
+            The challenge window is closed. Anyone can return the reporter’s bond.
+            This does not unhalt the protocol.
+          </p>
+          <TxStatus
+            phase={finalizeTx.txPhase}
+            error={finalizeTx.error || finalizeError}
+            txHash={finalizeTx.txHash}
+          />
+          <PrimaryButton
+            type="button"
+            onClick={onFinalize}
+            disabled={!mounted || finalizeTx.isLocked}
+          >
+            {finalizeTx.isLocked ? "Working…" : "Finalize appeal"}
+          </PrimaryButton>
+        </Card>
+      )}
     </div>
   );
 }

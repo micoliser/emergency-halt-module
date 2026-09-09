@@ -34,7 +34,7 @@ backend/
 │       ├── models.py           # SyncCursor
 │       ├── views.py            # /api/health + fast-path sync
 │       └── management/commands/sync_chain.py
-└── tests/                    # 55 tests, no network required
+└── tests/                    # 69 tests, no network required
 ```
 
 ---
@@ -105,7 +105,7 @@ All ids in request paths and responses are **on-chain ids**, not database rows.
 | GET | `/api/protocols/<id>` | Detail + embedded `active_case` |
 | GET | `/api/protocols/<id>/cases?offset=&limit=&status=` | Cases for one protocol |
 | GET | `/api/cases?offset=&limit=&protocol_id=&status=&reporter=` | Paginated list |
-| GET | `/api/cases/<id>` | Detail + embedded `protocol` summary |
+| GET | `/api/cases/<id>` | Detail + embedded `protocol` summary + `events` (oldest-first) |
 | POST | `/api/sync/protocols/<id>` | **Fast path** — inline resync, returns fresh protocol |
 | POST | `/api/sync/all` | Full poll-and-diff pass (seeding / manual refresh) |
 
@@ -137,6 +137,7 @@ is set (it is empty by default for local dev).
   "status": "HALTED",
   "is_halted": true,
   "governor": "0x1111111111111111111111111111111111111111",
+  "backup_unhalters": ["0x3333333333333333333333333333333333333333"],
   "exploit_definition": "Halt if evidence shows an active drain of user funds.",
   "trusted_domains": ["rentry.co"],
   "protected_actions": ["withdraw", "transfer"],
@@ -147,9 +148,11 @@ is set (it is empty by default for local dev).
   "reporter_bond_gen": "1",
   "active_case_id": 1,
   "case_count": 1,
+  "halted_at": "2026-09-08T07:00:30Z",
+  "appeal_ends_at": "2026-09-09T07:00:30Z",
   "created_at": "2026-09-08T07:00:00Z",
   "synced_at": "2026-09-08T07:01:00Z",
-  "active_case": { "...": "case shape, detail endpoint only; null when ACTIVE" }
+  "active_case": { "...": "case list shape, detail endpoint only; null when ACTIVE" }
 }
 ```
 
@@ -167,10 +170,29 @@ is set (it is empty by default for local dev).
   "status": "ACCEPTED_HALT",
   "bond_amount": "1000000000000000000",
   "bond_amount_gen": "1",
-  "bond_settled": true,
+  "bond_settled": false,
+  "event_count": 1,
   "submitted_at": "2026-09-08T07:00:30Z",
   "synced_at": "2026-09-08T07:01:00Z",
-  "protocol": { "id": 0, "name": "...", "status": "HALTED", "governor": "0x..." }
+  "protocol": { "id": 0, "name": "...", "status": "HALTED", "governor": "0x..." },
+  "events": [
+    {
+      "id": 1,
+      "case_id": 1,
+      "protocol_id": 0,
+      "event_type": "REPORT_EVALUATED",
+      "actor": "0x2222222222222222222222222222222222222222",
+      "statement": "Funds are being drained right now.",
+      "evidence_urls": ["https://rentry.co/incident"],
+      "consensus_bool": true,
+      "consensus_summary": "Active exploit confirmed",
+      "from_status": "OPEN",
+      "to_status": "ACCEPTED_HALT",
+      "bond_amount": "1000000000000000000",
+      "bond_disposition": "ESCROWED",
+      "created_at": "2026-09-08T07:00:30Z"
+    }
+  ]
 }
 ```
 
@@ -178,6 +200,13 @@ is set (it is empty by default for local dev).
 exceed `Number.MAX_SAFE_INTEGER`). `*_gen` fields are pre-formatted
 18-decimal display strings. Case ids are 1-indexed; `active_case_id == 0`
 means "no active case".
+
+**v1.1 additive fields:** `backup_unhalters` is a list of addresses (0–3).
+`halted_at` and `appeal_ends_at` are ISO-8601 UTC datetimes (`appeal_ends_at`
+= `halted_at + appeal_window_seconds`); both are `null` when the protocol is
+not halted. Case **list** omits `events`; case **detail** includes
+`events` oldest-first. Report-round `verdict_summary` is immutable — later
+rounds live only on events (`bond_disposition`, `consensus_summary`).
 
 Unknown protocol/case ids return `404`. A studionet outage on a `POST /sync/*`
 returns `502` with a `detail` message; a contract revert (bad id or wrong
@@ -195,7 +224,8 @@ accepted, so the frontend should do:
 3. Render the `protocol` object from that response, or re-`GET` the detail route
 
 `sync_protocol` reads `get_protocol` plus every page of
-`list_protocol_cases`, so the new case detail lands in the same call.
+`list_protocol_cases` and, for each case, `list_case_events` until
+exhausted, so the new case detail and timeline land in the same call.
 
 ---
 
@@ -203,13 +233,20 @@ accepted, so the frontend should do:
 
 `poll_and_diff` (beat, every 30s):
 
-1. `get_protocol_count()` / `get_case_count()` — the diff anchors
+1. `get_protocol_count()` / `get_case_count()` / `get_case_event_count()` —
+   the diff anchors
 2. Refresh **all** protocol pages: protocols mutate in place
    (`HALTED → ACTIVE` on unhalt does not bump any counter)
-3. Page in the new case tail from the cursor's `case_count`
+3. Page in the new case tail from the cursor's `case_count` (each case also
+   pages `list_case_events`)
 4. Re-read the cases of any protocol whose fields changed (an unhalt flips its
    case to `CLEARED`)
-5. Persist counts + `last_success_at` on `SyncCursor`, or `last_error` on failure
+5. Page **new** global events via `get_case_event(id)` for ids
+   `(cursor.case_event_count+1)…count` — catches events that do not change
+   protocol status (failed challenge/unhalt, `finalize_appeal`)
+6. Persist counts + `last_success_at` on `SyncCursor`, or `last_error` on failure
+
+Event rows are upserted by on-chain id and **never rewritten**.
 
 Every RPC call is throttled by `GENLAYER_RPC_THROTTLE_SECONDS` and retries
 rate limits (`-32006`, HTTP 429/5xx) with backoff. Contract reverts are

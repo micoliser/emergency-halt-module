@@ -182,6 +182,14 @@ class MultiContractHost:
             vm._contract_address = parent_contract_address
 
 
+def address_hex(account: Any) -> str:
+    if hasattr(account, "as_hex"):
+        return str(account.as_hex)
+    if isinstance(account, (bytes, bytearray)):
+        return "0x" + bytes(account).hex()
+    return str(account)
+
+
 def register_default_protocol(
     contract,
     *,
@@ -193,6 +201,7 @@ def register_default_protocol(
     bond: int = DEFAULT_BOND,
     min_evidence: int = DEFAULT_MIN_EVIDENCE,
     appeal_window_seconds: int = 86400,
+    backup_unhalters: list | None = None,
 ) -> int:
     if domains is None:
         domains = [TRUSTED_DOMAIN]
@@ -200,6 +209,9 @@ def register_default_protocol(
         actions = ["withdraw", "transfer"]
     if allowed_while_halted is None:
         allowed_while_halted = []
+    if backup_unhalters is None:
+        backup_unhalters = []
+    backups_json = [address_hex(b) for b in backup_unhalters]
     return contract.register_protocol(
         name,
         definition,
@@ -209,6 +221,7 @@ def register_default_protocol(
         bond,
         min_evidence,
         appeal_window_seconds,
+        json.dumps(backups_json),
     )
 
 
@@ -234,3 +247,63 @@ def mock_remediated_false(vm, summary: str = "Exploit still active") -> None:
     vm.clear_mocks()
     vm.mock_web(r".*", {"status": 200, "body": "Exploit still ongoing"})
     vm.mock_llm(r".*", json.dumps({"remediated": False, "summary": summary}))
+
+
+def mock_overturn_true(vm, summary: str = "Halt was unjustified; no active exploit") -> None:
+    vm.clear_mocks()
+    vm.mock_web(r".*", {"status": 200, "body": "False alarm: no active exploit matching definition"})
+    vm.mock_llm(r".*", json.dumps({"overturn": True, "summary": summary}))
+
+
+def mock_overturn_false(vm, summary: str = "Exploit still active; halt stands") -> None:
+    vm.clear_mocks()
+    vm.mock_web(r".*", {"status": 200, "body": "Active exploit still draining funds"})
+    vm.mock_llm(r".*", json.dumps({"overturn": False, "summary": summary}))
+
+
+def set_tx_timestamp(monkeypatch, timestamp: int, contract=None) -> None:
+    """Force HaltModule._tx_timestamp after halt (appeal-window tests).
+
+    Patches the loaded contract class method and `datetime` in that module
+    (the method body is `datetime.now`). Optionally also patches the live
+    instance class used by the GenVM storage wrapper.
+    """
+    import sys
+    from datetime import datetime as real_datetime, timezone
+
+    mod = sys.modules.get("_contract_halt_module")
+    if mod is None:
+        raise RuntimeError("HaltModule contract module is not loaded")
+
+    ts = int(timestamp)
+
+    def _fake_tx_timestamp(self):
+        return mod.u256(ts)
+
+    monkeypatch.setattr(mod.HaltModule, "_tx_timestamp", _fake_tx_timestamp)
+
+    class FrozenDateTime(real_datetime):
+        @classmethod
+        def now(cls, tz=None):
+            dt = real_datetime.fromtimestamp(ts, tz=timezone.utc)
+            if tz is None:
+                return dt.replace(tzinfo=None)
+            return dt.astimezone(tz)
+
+    monkeypatch.setattr(mod, "datetime", FrozenDateTime)
+
+    inst = None
+    if contract is not None:
+        try:
+            inst = object.__getattribute__(contract, "_instance")
+        except Exception:
+            proxy = getattr(contract, "_proxy", None)
+            if proxy is not None:
+                try:
+                    inst = object.__getattribute__(proxy, "_instance")
+                except Exception:
+                    inst = None
+    if inst is not None:
+        cls = type(inst)
+        if cls is not mod.HaltModule:
+            monkeypatch.setattr(cls, "_tx_timestamp", _fake_tx_timestamp)

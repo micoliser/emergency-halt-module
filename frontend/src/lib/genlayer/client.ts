@@ -51,6 +51,8 @@ export const WRITE_METHODS = {
   registerProtocol: "register_protocol",
   reportExploit: "report_exploit",
   requestUnhalt: "request_unhalt",
+  challengeHalt: "challenge_halt",
+  finalizeAppeal: "finalize_appeal",
   deposit: "deposit",
   withdraw: "withdraw",
 } as const;

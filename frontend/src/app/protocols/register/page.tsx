@@ -10,7 +10,7 @@ import { useHasMounted } from "@/hooks/useHasMounted";
 import { useTransaction } from "@/hooks/useTransaction";
 import { syncProtocol } from "@/lib/api";
 import { contractsConfigured, publicEnv } from "@/lib/env";
-import { csvToList, parseGen } from "@/lib/format";
+import { csvToList, isEthAddress, parseGen } from "@/lib/format";
 import { WRITE_METHODS } from "@/lib/genlayer/client";
 import { readProtocolCount } from "@/lib/genlayer/views";
 
@@ -42,6 +42,7 @@ export default function RegisterProtocolPage() {
   const { isConnected } = useAccount();
   const { execute, txPhase, isLocked, error, txHash } = useTransaction();
   const [form, setForm] = useState(EMPTY);
+  const [backups, setBackups] = useState(["", "", ""]);
   const [localError, setLocalError] = useState<string | null>(null);
 
   const set = (key: keyof FormState) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
@@ -90,6 +91,17 @@ export default function RegisterProtocolPage() {
       return;
     }
 
+    const backupAddresses = backups.map((addr) => addr.trim()).filter(Boolean);
+    if (backupAddresses.length > 3) {
+      setLocalError("At most three backup unhalters.");
+      return;
+    }
+    const invalidBackup = backupAddresses.find((addr) => !isEthAddress(addr));
+    if (invalidBackup) {
+      setLocalError(`Backup must be a 0x address: ${invalidBackup}`);
+      return;
+    }
+
     const args = [
       form.name.trim(),
       form.exploit_definition.trim(),
@@ -99,6 +111,7 @@ export default function RegisterProtocolPage() {
       bond,
       minEvidence,
       Number.isFinite(appeal) ? appeal : 86400,
+      JSON.stringify(backupAddresses),
     ];
 
     await execute(
@@ -141,7 +154,8 @@ export default function RegisterProtocolPage() {
         <h1 className="text-2xl font-semibold">Register a protocol</h1>
         <p className="text-sm text-muted">
           You become the owner. Anyone can later post a bonded exploit report; if
-          validators agree, protected actions pause until you lift the halt. This
+          validators agree, protected actions pause until you or a named backup
+          lift the halt. This
           does not deploy a vault, see the{" "}
           <Link href="/guide" className="text-accent underline-offset-2 hover:underline">
             developer guide
@@ -206,7 +220,10 @@ export default function RegisterProtocolPage() {
             />
           </Field>
           <div className="grid gap-4 sm:grid-cols-3">
-            <Field label="Report bond (GEN)">
+            <Field
+              label="Stake B (GEN)"
+              hint="Same amount for report, challenge, and unhalt."
+            >
               <TextInput
                 value={form.reporter_bond_gen}
                 onChange={set("reporter_bond_gen")}
@@ -231,6 +248,28 @@ export default function RegisterProtocolPage() {
                 inputMode="numeric"
               />
             </Field>
+          </div>
+          <div className="space-y-3">
+            <p className="text-sm font-medium text-ink">Backup unhalters (optional)</p>
+            <p className="text-xs text-muted">
+              Up to three extra wallets that can lift a halt with the same stake B
+              and the same remediation bar. They cannot change policy.
+            </p>
+            <div className="grid gap-3 sm:grid-cols-3">
+              {backups.map((value, index) => (
+                <TextInput
+                  key={index}
+                  value={value}
+                  onChange={(e) =>
+                    setBackups((prev) =>
+                      prev.map((addr, i) => (i === index ? e.target.value : addr)),
+                    )
+                  }
+                  placeholder={`0x… backup ${index + 1}`}
+                  spellCheck={false}
+                />
+              ))}
+            </div>
           </div>
 
           <TxStatus phase={txPhase} error={error || localError} txHash={txHash} />

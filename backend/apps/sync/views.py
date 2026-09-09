@@ -16,7 +16,7 @@ from rest_framework import status as http_status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
-from apps.cases.models import Case
+from apps.cases.models import Case, CaseEvent
 from apps.protocols.models import Protocol
 from apps.protocols.serializers import ProtocolDetailSerializer
 from apps.sync import indexer
@@ -71,6 +71,7 @@ def health(request):
         "indexed": {
             "protocols": Protocol.objects.count() if database_ok else None,
             "cases": Case.objects.count() if database_ok else None,
+            "events": CaseEvent.objects.count() if database_ok else None,
         },
         "cursor": SyncCursorSerializer(cursor_row).data if cursor_row else None,
     }

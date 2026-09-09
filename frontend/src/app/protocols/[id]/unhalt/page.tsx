@@ -12,7 +12,7 @@ import { useHasMounted } from "@/hooks/useHasMounted";
 import { useTransaction } from "@/hooks/useTransaction";
 import { getProtocol } from "@/lib/api";
 import { contractsConfigured, publicEnv } from "@/lib/env";
-import { csvToList, sameAddress } from "@/lib/format";
+import { bondWei, csvToList, isUnhaltAuthority } from "@/lib/format";
 import { WRITE_METHODS } from "@/lib/genlayer/client";
 
 export default function UnhaltPage() {
@@ -34,7 +34,7 @@ export default function UnhaltPage() {
   const [localError, setLocalError] = useState<string | null>(null);
 
   const p = protocolQ.data;
-  const isGovernor = sameAddress(address, p?.governor);
+  const isAuthority = isUnhaltAuthority(address, p);
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -48,8 +48,8 @@ export default function UnhaltPage() {
       setLocalError("Connect MetaMask first.");
       return;
     }
-    if (!isGovernor) {
-      setLocalError("Only the protocol owner can lift the halt.");
+    if (!isAuthority) {
+      setLocalError("Only the protocol owner or a named backup can lift the halt.");
       return;
     }
     if (p.status !== "HALTED") {
@@ -62,18 +62,30 @@ export default function UnhaltPage() {
       return;
     }
 
+    let value: bigint;
+    try {
+      value = bondWei(p.reporter_bond);
+    } catch {
+      setLocalError("Could not read the required bond amount.");
+      return;
+    }
+
     await execute(
       publicEnv.haltModuleAddress,
       WRITE_METHODS.requestUnhalt,
       [p.id, statement.trim(), JSON.stringify(evidence)],
       {
-        confirmingMessage: "Confirm in MetaMask…",
+        value,
+        confirmingMessage: `Confirm in MetaMask — send exactly ${p.reporter_bond_gen} GEN…`,
         submittedMessage: "Request submitted. Waiting for confirmation…",
         reviewingMessage: "Validators are reviewing the remediation evidence…",
-        confirmedMessage: "Request finished. The protocol should be active again.",
+        confirmedMessage:
+          "Request finished. If validators agreed, the protocol is active; if not, stake B was burned and it stays halted.",
         syncProtocolId: p.id,
         onConfirmed: async ({ protocol }) => {
           if (protocol) qc.setQueryData(["protocol", p.id], protocol);
+          await qc.invalidateQueries({ queryKey: ["protocol-cases", p.id] });
+          await qc.invalidateQueries({ queryKey: ["case"] });
           router.push(`/protocols/${p.id}`);
         },
       },
@@ -90,8 +102,11 @@ export default function UnhaltPage() {
       <div>
         <h1 className="text-2xl font-semibold">Lift the halt</h1>
         <p className="text-sm text-muted">
-          Only the protocol owner can do this. Validators must agree the exploit is fixed
-          before the protocol becomes active again.
+          The owner or a named backup can do this. You must send exactly stake B
+          ({p?.reporter_bond_gen ?? "?"} GEN). Validators must agree the exploit is
+          fixed. If they disagree, this transaction still completes and{" "}
+          <strong className="text-ink">burns</strong> that bond — the protocol stays
+          halted.
         </p>
       </div>
 
@@ -100,7 +115,9 @@ export default function UnhaltPage() {
           <div>
             <p className="font-medium">{p.name}</p>
             <p className="text-xs text-muted">
-              {isGovernor ? "You are the owner." : "Your wallet is not the owner."}
+              {isAuthority
+                ? "You may request unhalt."
+                : "Your wallet is not the owner or a backup unhalter."}
             </p>
           </div>
           <StatusBadge status={p.status} />
@@ -137,9 +154,11 @@ export default function UnhaltPage() {
           />
           <PrimaryButton
             type="submit"
-            disabled={!mounted || isLocked || !p || p.status !== "HALTED" || !isGovernor}
+            disabled={!mounted || isLocked || !p || p.status !== "HALTED" || !isAuthority}
           >
-            {isLocked ? "Working…" : "Request to lift halt"}
+            {isLocked
+              ? "Working…"
+              : `Request to lift halt (${p?.reporter_bond_gen ?? "?"} GEN)`}
           </PrimaryButton>
         </form>
       </Card>

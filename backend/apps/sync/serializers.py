@@ -9,6 +9,7 @@ class SyncCursorSerializer(serializers.ModelSerializer):
         fields = [
             "protocol_count",
             "case_count",
+            "case_event_count",
             "last_run_at",
             "last_success_at",
             "last_error",

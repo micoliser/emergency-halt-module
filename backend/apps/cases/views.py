@@ -27,9 +27,9 @@ class CaseListView(generics.ListAPIView):
 
 
 class CaseDetailView(generics.RetrieveAPIView):
-    """GET /api/cases/<id>"""
+    """GET /api/cases/<id> — includes `events` oldest-first (prefetched)."""
 
     serializer_class = CaseDetailSerializer
-    queryset = Case.objects.select_related("protocol")
+    queryset = Case.objects.select_related("protocol").prefetch_related("events")
     lookup_field = "onchain_id"
     lookup_url_kwarg = "onchain_id"

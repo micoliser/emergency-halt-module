@@ -3,7 +3,7 @@
 import pytest
 
 from apps.sync import indexer
-from tests.fakes import GOVERNOR, ONE_GEN
+from tests.fakes import BACKUP, GOVERNOR, ONE_GEN
 
 pytestmark = pytest.mark.django_db
 
@@ -36,7 +36,7 @@ def test_health_on_a_never_synced_database(client):
     body = client.get("/api/health").json()
 
     assert body["status"] == "ok"
-    assert body["indexed"] == {"protocols": 0, "cases": 0}
+    assert body["indexed"] == {"protocols": 0, "cases": 0, "events": 0}
     assert body["cursor"] is None
 
 
@@ -151,6 +151,58 @@ def test_case_detail_includes_protocol_context(client, seeded):
     assert body["protocol"]["id"] == 0
     assert body["protocol"]["status"] == "HALTED"
     assert body["submitted_at"] is not None
+    assert body["event_count"] == 1
+    assert len(body["events"]) == 1
+    assert body["events"][0]["event_type"] == "REPORT_EVALUATED"
+
+
+def test_case_detail_timeline_after_report_and_unhalt(client, chain):
+    chain.register_protocol(backup_unhalters=[BACKUP])
+    chain.report_exploit(0, exploit=True, summary="Drain confirmed")
+    chain.request_unhalt(0, summary="Patch verified")
+    indexer.poll_and_diff(reader=chain)
+
+    body = client.get("/api/cases/1").json()
+    events = body["events"]
+    assert len(events) >= 2
+    assert [row["event_type"] for row in events[:2]] == [
+        "REPORT_EVALUATED",
+        "UNHALT_EVALUATED",
+    ]
+    assert events[0]["consensus_summary"] == "Drain confirmed"
+    assert events[1]["consensus_summary"] == "Patch verified"
+    assert events[0]["bond_disposition"] == "ESCROWED"
+    assert events[1]["bond_disposition"] == "PAY_REPORTER|REFUND_REPORTER"
+    assert body["verdict_summary"] == "Drain confirmed"
+    assert "Unhalt:" not in body["verdict_summary"]
+
+
+def test_protocol_detail_shows_backups_and_halted_at(client, chain):
+    chain.register_protocol(backup_unhalters=[BACKUP])
+    chain.report_exploit(0, exploit=True)
+    indexer.poll_and_diff(reader=chain)
+
+    body = client.get("/api/protocols/0").json()
+    assert body["backup_unhalters"] == [BACKUP]
+    assert body["halted_at"] is not None
+    assert body["appeal_ends_at"] is not None
+    assert body["status"] == "HALTED"
+
+
+def test_protocol_list_includes_backups_and_still_lists(client, seeded):
+    body = client.get("/api/protocols").json()
+    assert body["count"] == 2
+    halted = body["results"][0]
+    assert "backup_unhalters" in halted
+    assert "halted_at" in halted
+    assert halted["backup_unhalters"] == []
+
+
+def test_case_detail_prefetches_events(client, seeded, django_assert_num_queries):
+    with django_assert_num_queries(2):
+        response = client.get("/api/cases/1")
+    assert response.status_code == 200
+    assert len(response.json()["events"]) == 1
 
 
 def test_unknown_case_is_404(client):
@@ -171,7 +223,7 @@ def test_health_reports_config_and_cursor(client, seeded, settings):
     assert body["database"]["ok"] is True
     assert body["chain"]["chain_id"] == settings.GENLAYER_CHAIN_ID
     assert body["chain"]["configured"] is True
-    assert body["indexed"] == {"protocols": 2, "cases": 1}
+    assert body["indexed"] == {"protocols": 2, "cases": 1, "events": 1}
     assert body["cursor"]["protocol_count"] == 2
     assert body["cursor"]["case_count"] == 1
 

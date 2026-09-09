@@ -101,9 +101,9 @@ export default function ReportExploitPage() {
       <div>
         <h1 className="text-2xl font-semibold">Report an exploit</h1>
         <p className="text-sm text-muted">
-          You must send exactly the report bond. If validators agree there is an active
-          exploit, the protocol halts and your bond is returned. If they disagree, the
-          bond goes to the protocol owner.
+          You must send exactly the report bond (stake B). If validators agree there
+          is an active exploit, the protocol halts and your bond is escrowed through
+          the challenge window. If they disagree, the bond goes to the protocol owner.
         </p>
       </div>
 

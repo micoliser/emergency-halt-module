@@ -77,12 +77,14 @@ export function GhostButton({
 export function Card({
   children,
   className,
+  id,
 }: {
   children: React.ReactNode;
   className?: string;
+  id?: string;
 }) {
   return (
-    <div className={cn("rounded-sm border border-line bg-bg-card p-5", className)}>
+    <div id={id} className={cn("rounded-sm border border-line bg-bg-card p-5", className)}>
       {children}
     </div>
   );

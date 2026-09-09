@@ -9,11 +9,11 @@ export function StatusBadge({
 }) {
   const upper = (status || "").toUpperCase();
   const tone =
-    upper === "ACTIVE" || upper === "CLEARED"
+    upper === "ACTIVE" || upper === "CLEARED" || upper === "OVERTURNED"
       ? "border-active/40 bg-active/15 text-active"
       : upper === "HALTED" || upper === "ACCEPTED_HALT"
         ? "border-halted/40 bg-halted/15 text-halted"
-        : upper === "REJECTED" || upper === "OVERTURNED"
+        : upper === "REJECTED"
           ? "border-line bg-bg-elev text-muted"
           : "border-warn/40 bg-warn/15 text-warn";
 
@@ -30,7 +30,7 @@ export function StatusBadge({
           "h-1.5 w-1.5 rounded-full",
           upper === "HALTED" || upper === "ACCEPTED_HALT"
             ? "animate-pulse bg-halted"
-            : upper === "ACTIVE" || upper === "CLEARED"
+            : upper === "ACTIVE" || upper === "CLEARED" || upper === "OVERTURNED"
               ? "bg-active"
               : "bg-warn",
         )}

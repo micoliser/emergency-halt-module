@@ -3,7 +3,15 @@ Frontend-ready protocol shapes.
 
 These response shapes are frozen for Phase 5 (IMPLEMENTATION_PLAN.md Phase 4
 fallback note): add fields, never rename or remove them.
+
+v1.1 additive fields:
+- `backup_unhalters`: checksum-normalized address list (0–3)
+- `halted_at`: ISO-8601 UTC datetime, or null when not halted (unix 0 on-chain)
+- `appeal_ends_at`: ISO-8601 UTC datetime = halted_at + appeal_window_seconds,
+  or null when not halted. Window expiry is a challenge deadline only.
 """
+
+from datetime import timedelta
 
 from rest_framework import serializers
 
@@ -22,6 +30,7 @@ class ProtocolSerializer(serializers.ModelSerializer):
     case_count = serializers.IntegerField(source="onchain_case_count", read_only=True)
     created_at = serializers.DateTimeField(source="chain_created_at", read_only=True)
     is_halted = serializers.BooleanField(read_only=True)
+    appeal_ends_at = serializers.SerializerMethodField()
 
     class Meta:
         model = Protocol
@@ -31,6 +40,7 @@ class ProtocolSerializer(serializers.ModelSerializer):
             "status",
             "is_halted",
             "governor",
+            "backup_unhalters",
             "exploit_definition",
             "trusted_domains",
             "protected_actions",
@@ -41,6 +51,8 @@ class ProtocolSerializer(serializers.ModelSerializer):
             "reporter_bond_gen",
             "active_case_id",
             "case_count",
+            "halted_at",
+            "appeal_ends_at",
             "created_at",
             "synced_at",
         ]
@@ -63,6 +75,13 @@ class ProtocolSerializer(serializers.ModelSerializer):
 
     def get_reporter_bond_gen(self, obj: Protocol) -> str:
         return format_gen(obj.reporter_bond)
+
+    def get_appeal_ends_at(self, obj: Protocol):
+        """ISO datetime: halted_at + appeal_window_seconds. Null if not halted."""
+        if obj.halted_at is None:
+            return None
+        window = self.get_appeal_window_seconds(obj)
+        return obj.halted_at + timedelta(seconds=window)
 
 
 class ProtocolDetailSerializer(ProtocolSerializer):

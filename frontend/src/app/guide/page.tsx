@@ -13,7 +13,7 @@ const TOC = [
   { href: "#register", label: "3. Register a protocol" },
   { href: "#contract", label: "4. Write your contract" },
   { href: "#deploy", label: "5. Deploy (Demo Vault)" },
-  { href: "#operate", label: "7. Report, halt, unhalt" },
+  { href: "#operate", label: "7. Report, challenge, unhalt" },
   { href: "#mistakes", label: "8. Common mistakes" },
 ];
 
@@ -28,6 +28,7 @@ const REGISTER_EXAMPLE = JSON.stringify(
     reporter_bond: 1000000000000000000,
     min_evidence: 1,
     appeal_window_seconds: 86400,
+    backup_unhalters_json: "[]",
   },
   null,
   2,
@@ -203,7 +204,8 @@ export default function GuidePage() {
             >
               Studio
             </a>
-            . The caller is the governor (only they can unhalt).
+            . The caller is the governor. Optional backup unhalters (0–3) can later
+            request unhalt; they cannot change policy.
           </p>
           <p className="text-sm text-muted">
             For a vault like ours, include <code className="font-mono">withdraw</code>{" "}
@@ -217,8 +219,9 @@ export default function GuidePage() {
               URLs must match.
             </li>
             <li>
-              <code className="font-mono text-ink">reporter_bond</code> — wei.{" "}
-              <code className="font-mono">1</code> GEN on the form is{" "}
+              <code className="font-mono text-ink">reporter_bond</code> — wei. This is
+              stake <code className="font-mono">B</code> for report, challenge, and
+              unhalt. <code className="font-mono">1</code> GEN on the form is{" "}
               <code className="font-mono">10^18</code>.
             </li>
           </ul>
@@ -295,7 +298,7 @@ export default function GuidePage() {
         </section>
 
         <section id="operate" className="scroll-mt-24 space-y-3">
-          <h2 className="text-xl font-semibold">7. Report, halt, unhalt</h2>
+          <h2 className="text-xl font-semibold">7. Report, challenge, unhalt</h2>
           <ul className="list-disc space-y-2 pl-5 text-sm text-muted">
             <li>
               Evidence URLs must be <strong className="text-ink">public</strong>.
@@ -304,18 +307,33 @@ export default function GuidePage() {
               listed).
             </li>
             <li>
-              Send <strong className="text-ink">exactly</strong> the reporter bond
-              with <code className="font-mono">report_exploit</code>.
+              Send <strong className="text-ink">exactly</strong> stake{" "}
+              <code className="font-mono">B</code> (the reporter bond) with{" "}
+              <code className="font-mono">report_exploit</code>,{" "}
+              <code className="font-mono">challenge_halt</code>, and{" "}
+              <code className="font-mono">request_unhalt</code>.
             </li>
             <li>
               If validators agree there is an active exploit, the protocol goes{" "}
               <strong className="text-ink">HALTED</strong>. Linked vaults that gate{" "}
-              <code className="font-mono">withdraw</code> freeze withdrawals.
+              <code className="font-mono">withdraw</code> freeze withdrawals. The
+              reporter bond is escrowed through the challenge window.
             </li>
             <li>
-              Only the governor can <code className="font-mono">request_unhalt</code>{" "}
-              with remediation evidence. After a yes vote, the protocol is ACTIVE
-              again.
+              Anyone can <code className="font-mono">challenge_halt</code> while the
+              appeal window is open. A successful challenge overturns the halt; a
+              failed challenge pays the reporter.
+            </li>
+            <li>
+              The governor or a backup unhalter can{" "}
+              <code className="font-mono">request_unhalt</code> anytime while halted.
+              Success pays the reporter; a failed unhalt{" "}
+              <strong className="text-ink">burns</strong> stake B and stays HALTED.
+            </li>
+            <li>
+              Each consensus step is an append-only event on the incident timeline.
+              After the window, <code className="font-mono">finalize_appeal</code>{" "}
+              releases remaining escrow without unhalting.
             </li>
           </ul>
         </section>
