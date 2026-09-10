@@ -1,4 +1,4 @@
-# Emergency Halt Module — Architecture
+# ProofHalt — Architecture
 
 ## Problem
 

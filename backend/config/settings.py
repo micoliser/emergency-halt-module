@@ -1,5 +1,5 @@
 """
-Django settings for the Emergency Halt Module thin indexer.
+Django settings for the ProofHalt thin indexer.
 
 Ownership rule (IMPLEMENTATION_PLAN.md §2.2): this service caches on-chain
 reads only. It never invents or overrides halt verdicts.

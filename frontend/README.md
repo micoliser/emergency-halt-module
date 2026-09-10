@@ -1,4 +1,4 @@
-# Frontend — Emergency Halt Module demo
+# Frontend — ProofHalt demo
 
 Next.js App Router demo: MetaMask writes to GenLayer (studionet), reads from the
 Django indexer, and fast-path syncs through a **server-side proxy** so

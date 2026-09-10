@@ -103,15 +103,15 @@ export default function GuidePage() {
       <div className="max-w-3xl space-y-10">
         <header className="space-y-3">
           <h1 className="text-3xl font-semibold tracking-tight">
-            Wire an app to the Halt Module
+            Wire an app to ProofHalt
           </h1>
           <p className="text-muted">
             If an exploit is draining user funds, you need a kill switch for the
             dangerous actions (withdraw, transfer, anything that moves value)
-            without waiting on a company admin. The Halt Module is that switch:
-            anyone can post a bonded public report, GenLayer validators judge the
-            evidence, and if they agree the exploit is real, your protocol is marked
-            halted.
+            without waiting on a company admin. ProofHalt’s Halt Module is that
+            switch: anyone can post a bonded public report, GenLayer validators
+            judge the evidence, and if they agree the exploit is real, your
+            protocol is marked halted.
           </p>
           <p className="text-muted">
             You need it because your contract still executes those methods unless you

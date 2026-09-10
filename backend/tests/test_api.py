@@ -230,5 +230,5 @@ def test_health_reports_config_and_cursor(client, seeded, settings):
 
 def test_root_lists_routes(client):
     body = client.get("/").json()
-    assert body["service"] == "emergency-halt-module-indexer"
+    assert body["service"] == "proofhalt-indexer"
     assert any("/api/protocols" in route for route in body["routes"])

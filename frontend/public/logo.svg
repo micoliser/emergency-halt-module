@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none" role="img" aria-label="ProofHalt">
+  <rect width="64" height="64" rx="12" fill="#101210"/>
+  <path
+    fill="#d4a017"
+    d="M22.5 8h19L56 22.5v19L41.5 56h-19L8 41.5v-19L22.5 8z"
+  />
+  <path
+    stroke="#f7f4ec"
+    stroke-width="5.5"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    d="M20 32.5 28.5 41 44 23.5"
+  />
+</svg>

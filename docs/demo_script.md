@@ -1,4 +1,4 @@
-# Demo script — Emergency Halt Module (v1.1)
+# Demo script — ProofHalt (v1.1)
 
 Studionet only: chain id **61999**, RPC `https://studio.genlayer.com/api`,
 Studio `https://studio.genlayer.com`, faucet 💧 in the Studio UI.

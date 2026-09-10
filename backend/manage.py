@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Django management entrypoint for the Emergency Halt Module indexer."""
+"""Django management entrypoint for the ProofHalt indexer."""
 
 import os
 import sys

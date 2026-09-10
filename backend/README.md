@@ -1,4 +1,4 @@
-# Backend — thin indexer (Phase 4)
+# Backend — ProofHalt thin indexer
 
 Django + DRF + Postgres + Redis + Celery. It caches Halt Module state so the
 frontend can read lists and detail pages without hammering studionet.

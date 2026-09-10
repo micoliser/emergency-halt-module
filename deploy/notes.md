@@ -1,4 +1,4 @@
-# Deploy notes — Emergency Halt Module
+# Deploy notes — ProofHalt
 
 ## Network: Studionet only
 

@@ -1,8 +1,8 @@
-# Emergency Halt Module
+# ProofHalt
 
 Anyone can prove an active exploit. GenLayer validators decide. Opt-in apps freeze until the owner proves the issue is fixed.
 
-Studionet demo for the GenLayer Agent Tank **Autonomous Protocols** track: a reusable halt registry that judges public evidence, plus a Demo Vault that refuses withdrawals while halted.
+Studionet demo for the GenLayer Agent Tank **Autonomous Protocols** track: a reusable Halt Module that judges public evidence, plus a Demo Vault that refuses withdrawals while halted.
 
 ## How it works
 

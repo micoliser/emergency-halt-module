@@ -1,4 +1,4 @@
-# Demo video outline (60–90s) — v1.1
+# Demo video outline (60–90s) — ProofHalt v1.1
 
 Record on Studionet with the live Demo Vault protocol. Prefer **Path A** if you
 only shoot one take (challenge + timeline is the v1.1 differentiator). Path B
@@ -15,7 +15,7 @@ is a strong second take or mid-video cut.
 
 | Time | Shot | On screen |
 |---|---|---|
-| 0–8s | Home / brand | One-line pitch; Studionet badge |
+| 0–8s | Home / ProofHalt logo | Brand + one-line pitch; Studionet badge |
 | 8–18s | Demo Vault | Deposit + withdraw while ACTIVE |
 | 18–35s | Report | Paste incident rentry; show risk notice; MetaMask `B` |
 | 35–45s | Halted vault | Withdraw blocked; appeal countdown |

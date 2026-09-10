@@ -17,9 +17,13 @@ const plexMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Emergency Halt Module",
+  title: "ProofHalt",
   description:
-    "Anyone can prove an active exploit; AI validators decide; the target freezes until recovery clears.",
+    "Anyone can prove an active exploit; GenLayer validators decide; opt-in apps freeze until recovery clears.",
+  icons: {
+    icon: [{ url: "/favicon.svg", type: "image/svg+xml" }],
+    apple: [{ url: "/proofhalt-logo.png" }],
+  },
 };
 
 export default function RootLayout({

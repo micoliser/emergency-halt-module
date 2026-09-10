@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { getHealth } from "@/lib/api";
 import { Card } from "@/components/ui";
+import { ProofHaltLogo } from "@/components/ProofHaltLogo";
 import { StatusBadge } from "@/components/StatusBadge";
 import type { HealthResponse } from "@/lib/types";
 
@@ -78,15 +79,23 @@ export default function HomePage() {
     <div className="space-y-20">
       <section className="grid gap-10 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)] lg:items-end">
         <div className="space-y-5">
-          <p className="text-xs uppercase tracking-[0.2em] text-accent">
-            Emergency Halt Module
-          </p>
-          <h1 className="max-w-3xl text-3xl font-semibold tracking-tight sm:text-5xl sm:leading-[1.1]">
+          <div className="flex items-center gap-4">
+            <ProofHaltLogo href={null} size={56} />
+            <div>
+              <p className="text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
+                ProofHalt
+              </p>
+              <p className="mt-1 text-xs uppercase tracking-[0.18em] text-accent">
+                proof · then freeze
+              </p>
+            </div>
+          </div>
+          <h1 className="max-w-3xl text-2xl font-semibold tracking-tight text-ink/95 sm:text-3xl sm:leading-[1.15]">
             Anyone can prove an active exploit. Validators decide. The vault freezes.
           </h1>
           <p className="max-w-2xl text-base text-muted sm:text-lg">
             Autonomous protocols still need a kill switch when funds are being drained.
-            This is an opt-in safety layer: bonded public reports, on-chain AI
+            ProofHalt is an opt-in safety layer: bonded public reports, on-chain AI
             judgment, and a freeze of the actions you marked as dangerous until
             an owner or backup proves the issue is fixed. Every consensus step
             lands on the incident timeline.

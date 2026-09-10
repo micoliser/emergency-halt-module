@@ -5,7 +5,7 @@ from django.urls import include, path
 def root(_request):
     return JsonResponse(
         {
-            "service": "emergency-halt-module-indexer",
+            "service": "proofhalt-indexer",
             "docs": "backend/README.md",
             "routes": [
                 "GET  /api/health",

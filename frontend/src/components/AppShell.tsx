@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ConfigBanner } from "@/components/ConfigBanner";
 import { ConnectWallet } from "@/components/ConnectWallet";
+import { ProofHaltLogo } from "@/components/ProofHaltLogo";
 import { cn } from "@/lib/utils";
 
 const NAV = [
@@ -30,14 +31,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <header className="sticky top-0 z-40 border-b border-line bg-bg-elev/95 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3">
           <div className="flex items-center gap-6">
-            <Link href="/" className="flex items-baseline gap-2">
-              <span className="font-mono text-lg font-bold tracking-[0.18em] text-accent">
-                HALT
-              </span>
-              <span className="hidden text-xs uppercase tracking-widest text-muted sm:inline">
-                Emergency module
-              </span>
-            </Link>
+            <ProofHaltLogo withWordmark size={36} />
             <nav className="hidden items-center gap-1 md:flex">
               {NAV.map((item) => {
                 const active = navActive(pathname, item.href);
@@ -75,7 +69,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <ConfigBanner />
       <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8">{children}</main>
       <footer className="border-t border-line px-4 py-4 text-center text-xs text-muted">
-        Emergency Halt Module · GenLayer Studionet demo
+        <span className="inline-flex items-center justify-center gap-2">
+          <ProofHaltLogo href={null} size={18} />
+          ProofHalt · GenLayer Studionet demo
+        </span>
       </footer>
     </div>
   );

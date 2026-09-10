@@ -1,4 +1,4 @@
-# Security notes
+# Security notes — ProofHalt
 
 This is a Studionet hackathon demo, not a production incident-response product. The notes below match what the contracts actually do.
 

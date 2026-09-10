@@ -1,4 +1,4 @@
-"""Pytest fixtures for Emergency Halt Module direct-mode tests."""
+"""Pytest fixtures for ProofHalt Halt Module direct-mode tests."""
 
 from __future__ import annotations
 
