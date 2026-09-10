@@ -4,7 +4,6 @@ from genlayer import *
 from dataclasses import dataclass
 from datetime import datetime, timezone
 import json
-import re
 
 
 # ---------------------------------------------------------------------------
@@ -141,7 +140,8 @@ class CaseEvent:
 def _normalize_host(url_or_host: str) -> str:
     """
     Normalize a hostname from a URL or bare host for allowlist matching.
-    Lowercases, strips scheme, path/query/fragment, userinfo, port, and leading www.
+    Same GenLayer-safe algorithm as Multi-Source-Consensus-Oracle `_extract_domain`:
+    lowercase; strip scheme; cut at / ? #; take host after @; drop port; strip www.
     """
     normalized = url_or_host.strip().lower()
     if "://" in normalized:
@@ -155,6 +155,69 @@ def _normalize_host(url_or_host: str) -> str:
     if normalized.startswith("www."):
         normalized = normalized[4:]
     return normalized
+
+
+def _looks_like_ipv4(host: str) -> bool:
+    parts = host.split(".")
+    if len(parts) != 4:
+        return False
+    for part in parts:
+        if not part.isdigit():
+            return False
+        if len(part) > 1 and part.startswith("0"):
+            return True
+        if int(part) > 255:
+            return True
+    return True
+
+
+def _assert_safe_hostname(host: str) -> None:
+    """
+    Hosts must be DNS names (ASCII labels), not IP literals or IDN code points.
+    Punycode (xn--) is allowed because it is already ASCII.
+    """
+    if not host or "." not in host:
+        raise gl.vm.UserError("Trusted domain must be a valid hostname")
+    if any(ord(c) > 127 for c in host):
+        raise gl.vm.UserError(
+            "Trusted domain must be ASCII (use punycode xn-- for IDN hosts)"
+        )
+    if any(c in host for c in (" ", "/", "?", "#", "@", "|", "[", "]", "%")):
+        raise gl.vm.UserError("Trusted domain hostname is invalid")
+    if _looks_like_ipv4(host):
+        raise gl.vm.UserError("Trusted domains cannot be IP addresses")
+    # Reject lone hex-ish or numeric-only "hosts" that are not dotted DNS.
+    labels = host.split(".")
+    if any(not label for label in labels):
+        raise gl.vm.UserError("Trusted domain hostname is invalid")
+    for label in labels:
+        if label.startswith("-") or label.endswith("-"):
+            raise gl.vm.UserError("Trusted domain hostname is invalid")
+        for c in label:
+            if not (("a" <= c <= "z") or ("0" <= c <= "9") or c == "-"):
+                raise gl.vm.UserError("Trusted domain hostname is invalid")
+
+
+def _normalize_evidence_url_key(url: str) -> str:
+    """
+    Duplicate key: lowercase scheme + normalized host + path (no query/fragment).
+    Trailing slashes on the path are collapsed so /a and /a/ count as the same.
+    """
+    raw = url.strip()
+    lower = raw.lower()
+    if "://" not in lower:
+        return lower
+    scheme, rest = lower.split("://", 1)
+    rest = rest.split("#", 1)[0].split("?", 1)[0]
+    if "/" in rest:
+        host_part, path = rest.split("/", 1)
+        path = "/" + path
+    else:
+        host_part, path = rest, "/"
+    host = _normalize_host(f"{scheme}://{host_part}")
+    while len(path) > 1 and path.endswith("/"):
+        path = path[:-1]
+    return f"{scheme}://{host}{path}"
 
 
 def _escape_untrusted(text: str) -> str:
@@ -171,6 +234,36 @@ def _parse_json_list(raw: str, field_name: str) -> list:
     return parsed
 
 
+def _first_balanced_json_object(text: str):
+    """Return the first top-level {...} span, respecting JSON strings."""
+    start = text.find("{")
+    if start < 0:
+        return None
+    depth = 0
+    in_string = False
+    escape = False
+    for i in range(start, len(text)):
+        ch = text[i]
+        if in_string:
+            if escape:
+                escape = False
+            elif ch == "\\":
+                escape = True
+            elif ch == '"':
+                in_string = False
+            continue
+        if ch == '"':
+            in_string = True
+            continue
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                return text[start : i + 1]
+    return None
+
+
 def _extract_json_object(raw) -> dict:
     if isinstance(raw, dict):
         return raw
@@ -183,15 +276,19 @@ def _extract_json_object(raw) -> dict:
             return parsed
     except Exception:
         pass
-    match = re.search(r"\{.*\}", cleaned, re.DOTALL)
-    if not match:
+    snippet = _first_balanced_json_object(cleaned)
+    if not snippet:
         raise gl.vm.UserError("Failed to parse AI evaluation result: No JSON object found")
     try:
-        parsed = json.loads(match.group(0))
+        parsed = json.loads(snippet)
     except Exception as e:
         raise gl.vm.UserError(f"Failed to parse AI evaluation result: {str(e)}")
     if not isinstance(parsed, dict):
         raise gl.vm.UserError("Invalid LLM verdict: expected JSON object")
+    # Reject leftover second objects that a greedy regex would have swallowed.
+    remainder = cleaned[cleaned.find(snippet) + len(snippet) :].strip()
+    if remainder.startswith("{") or remainder.startswith("["):
+        raise gl.vm.UserError("Invalid LLM verdict: multiple JSON values")
     return parsed
 
 
@@ -213,6 +310,8 @@ class HaltModule(gl.Contract):
         self.case_event_count = u256(0)
 
     def _tx_timestamp(self) -> u256:
+        # GenVM wall-clock UTC. No consensus/block timestamp API in this SDK;
+        # see docs/SECURITY.md (Appeal window).
         return u256(int(datetime.now(timezone.utc).timestamp()))
 
     def _parse_address(self, address) -> Address:
@@ -437,10 +536,7 @@ class HaltModule(gl.Contract):
                 if scheme not in ("http", "https"):
                     raise gl.vm.UserError("Trusted domain URLs must use http:// or https://")
             host = _normalize_host(candidate)
-            if not host or "." not in host:
-                raise gl.vm.UserError("Trusted domain must be a valid hostname")
-            if any(c in host for c in (" ", "/", "?", "#", "@", "|")):
-                raise gl.vm.UserError("Trusted domain hostname is invalid")
+            _assert_safe_hostname(host)
             if host in seen:
                 raise gl.vm.UserError("Trusted domains must be distinct")
             seen.add(host)
@@ -488,6 +584,7 @@ class HaltModule(gl.Contract):
 
         trusted = set(d for d in trusted_domains_joined.split("|") if d)
         urls: list[str] = []
+        seen_keys: set[str] = set()
         for item in raw_list:
             if not isinstance(item, str) or not item.strip():
                 raise gl.vm.UserError("Evidence URLs must be non-empty strings")
@@ -503,6 +600,10 @@ class HaltModule(gl.Contract):
                 raise gl.vm.UserError(
                     f"Evidence URL host '{host}' is not in the protocol trusted domains"
                 )
+            key = _normalize_evidence_url_key(url)
+            if key in seen_keys:
+                raise gl.vm.UserError("Evidence URLs must be distinct")
+            seen_keys.add(key)
             urls.append(url)
         return urls
 
@@ -522,6 +623,9 @@ class HaltModule(gl.Contract):
             page_verdicts: list[dict] = []
             for url in urls_local:
                 try:
+                    # Allowlist checks the submitted URL only. mode="text" returns
+                    # page body text — no final post-redirect URL is exposed to
+                    # re-validate (see docs/SECURITY.md, Redirects).
                     page_text = gl.nondet.web.render(url, mode="text")
                 except Exception as e:
                     # Skip unreachable pages; aggregation enforces min_evidence.
@@ -656,6 +760,9 @@ Return JSON only:
             page_verdicts: list[dict] = []
             for url in urls_local:
                 try:
+                    # Allowlist checks the submitted URL only. mode="text" returns
+                    # page body text — no final post-redirect URL is exposed to
+                    # re-validate (see docs/SECURITY.md, Redirects).
                     page_text = gl.nondet.web.render(url, mode="text")
                 except Exception as e:
                     _ = e
@@ -804,6 +911,9 @@ Return JSON only:
             page_verdicts: list[dict] = []
             for url in urls_local:
                 try:
+                    # Allowlist checks the submitted URL only. mode="text" returns
+                    # page body text — no final post-redirect URL is exposed to
+                    # re-validate (see docs/SECURITY.md, Redirects).
                     page_text = gl.nondet.web.render(url, mode="text")
                 except Exception as e:
                     _ = e
@@ -1583,12 +1693,18 @@ Return JSON only:
         ACTIVE: all actions allowed.
         HALTED: fail-closed — only actions in allowed_while_halted are permitted.
         Unknown / mistyped actions (e.g. "withdraws") return False while halted.
+
+        Note: `protected_actions` is the governor's declared sensitive set for
+        integrators; this gate does not read it. Apps must call this view with
+        the same action string they protect (see is_protected_action).
         """
         pid = u256(int(protocol_id))
         protocol = self._require_protocol(pid)
         if not isinstance(action, str) or not action.strip():
             raise gl.vm.UserError("action is required")
         action_norm = action.strip()
+        if len(action_norm) > ACTION_MAX:
+            raise gl.vm.UserError(f"action too long (max {ACTION_MAX})")
         if protocol.status == STATUS_ACTIVE:
             return True
         if protocol.status == STATUS_HALTED:
@@ -1597,3 +1713,21 @@ Return JSON only:
             )
             return action_norm in allowed
         return False
+
+    @gl.public.view
+    def is_protected_action(self, protocol_id: int, action: str) -> bool:
+        """
+        Whether `action` is in the protocol's registered protected_actions list.
+        Integrator helper only — does not grant or deny execution by itself.
+        """
+        pid = u256(int(protocol_id))
+        protocol = self._require_protocol(pid)
+        if not isinstance(action, str) or not action.strip():
+            raise gl.vm.UserError("action is required")
+        action_norm = action.strip()
+        if len(action_norm) > ACTION_MAX:
+            raise gl.vm.UserError(f"action too long (max {ACTION_MAX})")
+        protected = set(
+            a for a in protocol.protected_actions_joined.split("|") if a
+        )
+        return action_norm in protected

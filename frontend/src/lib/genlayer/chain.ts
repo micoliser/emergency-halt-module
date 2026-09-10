@@ -38,9 +38,25 @@ export const studionetWalletParams = {
   blockExplorerUrls: [STUDIONET_EXPLORER],
 };
 
+async function readProviderChainId(
+  eth: { request: (args: { method: string; params?: unknown[] }) => Promise<unknown> },
+): Promise<string> {
+  const raw = await eth.request({ method: "eth_chainId" });
+  return String(raw ?? "").toLowerCase();
+}
+
+/**
+ * Switch MetaMask to Studionet and verify eth_chainId matches.
+ * Throws (fail closed) if the provider is missing or still on the wrong chain.
+ */
 export async function ensureStudionetChain(): Promise<void> {
   const eth = typeof window !== "undefined" ? window.ethereum : undefined;
-  if (!eth?.request) return;
+  if (!eth?.request) {
+    throw new Error("No Ethereum provider found. Install MetaMask.");
+  }
+
+  const expected = studionetWalletParams.chainId.toLowerCase();
+
   try {
     await eth.request({
       method: "wallet_switchEthereumChain",
@@ -53,10 +69,22 @@ export async function ensureStudionetChain(): Promise<void> {
         method: "wallet_addEthereumChain",
         params: [studionetWalletParams],
       });
-      return;
+      // Adding a chain does not always switch to it — switch explicitly.
+      await eth.request({
+        method: "wallet_switchEthereumChain",
+        params: [{ chainId: studionetWalletParams.chainId }],
+      });
+    } else {
+      throw err instanceof Error
+        ? err
+        : new Error("Could not switch MetaMask to Studionet.");
     }
-    // Studionet RPC is GenLayer JSON-RPC, not always eth_chainId-compatible.
-    // Writes still go through genlayer-js client.connect("studionet").
-    console.warn("Could not switch MetaMask to studionet:", err);
+  }
+
+  const current = await readProviderChainId(eth);
+  if (current !== expected) {
+    throw new Error(
+      `Wrong network: expected Studionet (${expected}), got ${current || "unknown"}. Switch MetaMask and try again.`,
+    );
   }
 }

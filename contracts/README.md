@@ -37,7 +37,7 @@ Method surface, storage shape, and state machine are locked in [IMPLEMENTATION_P
 | `halt_module.py` | Registry, bonded reports, adjudication, halt/unhalt |
 | `demo_vault.py` | Opt-in vault gated by `is_action_allowed(..., "withdraw")` |
 
-**Demo Vault action string:** `withdraw` is hardcoded in the vault. Register the protocol with `"withdraw"` in `protected_actions` and **not** in `allowed_while_halted`, or the demo gate will not match.
+**Demo Vault action string:** `withdraw` is hardcoded in the vault. Register the protocol with `"withdraw"` in `protected_actions` and **not** in `allowed_while_halted`, or the demo gate will not match. `is_action_allowed` only consults `allowed_while_halted` while `HALTED` — use `is_protected_action` (or the indexed `protected_actions` list) to check the governor's declared sensitive set.
 
 ## Lint / test (after contracts exist)
 
@@ -56,7 +56,7 @@ cd .. && pytest tests/direct/ -v
 |---|---|
 | `register_protocol(...)` | Caller = governor; domains normalized; `allowed_while_halted_json` (may be `[]`); no overlap with protected |
 | `report_exploit(...)` | Payable exact bond; majority D3 aggregation; refund/slash via `_Recipient.emit_transfer` |
-| `request_unhalt(...)` | Governor only; remediation majority |
+| `request_unhalt(...)` | Governor **or** backup unhalters; remediation majority |
 | Views | counts, get/list protocols & cases, `is_action_allowed` (fail-closed when HALTED) |
 
 **Halt gate:** While `ACTIVE`, all actions allowed. While `HALTED`, only actions in `allowed_while_halted` return `true` (typos/unknown → `false`).

@@ -51,7 +51,14 @@ export function ConnectWallet() {
           {wrongChain && (
             <button
               type="button"
-              onClick={() => ensureStudionetChain()}
+              onClick={() => {
+                setError("");
+                void ensureStudionetChain().catch((err) => {
+                  setError(
+                    err instanceof Error ? err.message : "Could not switch to Studionet.",
+                  );
+                });
+              }}
               className="rounded-sm border border-warn/40 bg-warn/10 px-2 py-1 text-[11px] font-medium uppercase tracking-wide text-warn"
             >
               Switch to studionet

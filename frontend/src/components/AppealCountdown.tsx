@@ -46,7 +46,8 @@ export function AppealCountdown({
         )}
       </p>
       <p className="text-xs text-muted">
-        Deadline {formatTimestamp(appealEndsAt)} (chain time from the indexer)
+        Based on indexer time ({formatTimestamp(appealEndsAt)}). The GenVM clock
+        still enforces the real deadline.
       </p>
     </div>
   );

@@ -94,6 +94,9 @@ export function getCase(id: number): Promise<CaseDetail> {
   return request<CaseDetail>(`/api/cases/${id}`);
 }
 
+/** Custom header so classic form CSRF cannot forge sync POSTs (forces preflight). */
+const SYNC_CSRF_HEADER = { "X-Requested-With": "ProofHalt" } as const;
+
 /**
  * Fast-path resync after a wallet write. Goes through the Next.js proxy so
  * X-Sync-Secret never ships in NEXT_PUBLIC_* env.
@@ -101,6 +104,7 @@ export function getCase(id: number): Promise<CaseDetail> {
 export async function syncProtocol(id: number): Promise<SyncProtocolResponse> {
   const res = await fetch(`/api/sync/protocols/${id}`, {
     method: "POST",
+    headers: SYNC_CSRF_HEADER,
     signal: AbortSignal.timeout(45_000),
   });
   if (!res.ok) {
@@ -112,6 +116,7 @@ export async function syncProtocol(id: number): Promise<SyncProtocolResponse> {
 export async function syncAll(): Promise<{ synced: unknown }> {
   const res = await fetch("/api/sync/all", {
     method: "POST",
+    headers: SYNC_CSRF_HEADER,
     signal: AbortSignal.timeout(60_000),
   });
   if (!res.ok) {

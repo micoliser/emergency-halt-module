@@ -113,6 +113,42 @@ def test_register_duplicate_domains(halt_module, direct_vm, direct_accounts):
     assert "distinct" in str(exc.value).lower()
 
 
+def test_register_rejects_ipv4_trusted_domain(halt_module, direct_vm, direct_accounts):
+    contract = halt_module
+    direct_vm.sender = direct_accounts[0]
+    with pytest.raises(Exception) as exc:
+        contract.register_protocol(
+            "Name",
+            "definition",
+            json.dumps(["192.0.2.1"]),
+            json.dumps(["withdraw"]),
+            json.dumps([]),
+            DEFAULT_BOND,
+            1,
+            0,
+            json.dumps([]),
+        )
+    assert "ip" in str(exc.value).lower()
+
+
+def test_register_rejects_non_ascii_trusted_domain(halt_module, direct_vm, direct_accounts):
+    contract = halt_module
+    direct_vm.sender = direct_accounts[0]
+    with pytest.raises(Exception) as exc:
+        contract.register_protocol(
+            "Name",
+            "definition",
+            json.dumps(["exämple.com"]),
+            json.dumps(["withdraw"]),
+            json.dumps([]),
+            DEFAULT_BOND,
+            1,
+            0,
+            json.dumps([]),
+        )
+    assert "ascii" in str(exc.value).lower() or "punycode" in str(exc.value).lower()
+
+
 def test_register_overlap_allowed_and_protected(halt_module, direct_vm, direct_accounts):
     contract = halt_module
     direct_vm.sender = direct_accounts[0]
@@ -138,6 +174,23 @@ def test_is_action_allowed_active(halt_module, direct_vm, direct_accounts):
     assert contract.is_action_allowed(0, "withdraw") is True
     assert contract.is_action_allowed(0, "transfer") is True
     assert contract.is_action_allowed(0, "deposit") is True
+
+
+def test_is_action_allowed_rejects_oversized_action(halt_module, direct_vm, direct_accounts):
+    contract = halt_module
+    direct_vm.sender = direct_accounts[0]
+    register_default_protocol(contract)
+    with pytest.raises(Exception) as exc:
+        contract.is_action_allowed(0, "w" * 65)
+    assert "too long" in str(exc.value).lower()
+
+
+def test_is_protected_action_view(halt_module, direct_vm, direct_accounts):
+    contract = halt_module
+    direct_vm.sender = direct_accounts[0]
+    register_default_protocol(contract)
+    assert contract.is_protected_action(0, "withdraw") is True
+    assert contract.is_protected_action(0, "deposit") is False
 
 
 def test_pagination_empty_and_overflow(halt_module, direct_vm, direct_accounts):
@@ -215,6 +268,25 @@ def test_report_userinfo_host_trick(halt_module, direct_vm, direct_accounts):
             json.dumps([f"https://{TRUSTED_DOMAIN}@evil.example.org/x"]),
         )
     assert "trusted" in str(exc.value).lower()
+
+
+def test_report_duplicate_evidence_urls(halt_module, direct_vm, direct_accounts):
+    """Duplicate normalized host+path URLs cannot pad min_evidence."""
+    contract = halt_module
+    direct_vm.sender = direct_accounts[0]
+    register_default_protocol(contract)
+
+    reporter = direct_accounts[1]
+    direct_vm.sender = reporter
+    direct_vm.value = DEFAULT_BOND
+    base = f"https://{TRUSTED_DOMAIN}/incident"
+    with pytest.raises(Exception) as exc:
+        contract.report_exploit(
+            0,
+            "Duplicate links",
+            json.dumps([base, f"{base}?utm=1", f"{base}/"]),
+        )
+    assert "distinct" in str(exc.value).lower()
 
 
 def test_report_exploit_true_halts(halt_module, direct_vm, direct_accounts):

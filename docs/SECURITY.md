@@ -8,11 +8,23 @@ Definition, allegation, statement, and fetched evidence are wrapped in tagged bl
 
 ## Trusted domains
 
-Hosts are lowercased. Scheme, path, query, fragment, userinfo (`user@host`), port, and a leading `www.` are stripped before allowlist match. Evidence URLs must be `http://` or `https://` and the normalized host must equal a registered domain. The same gate applies to report, challenge, and unhalt evidence. Direct tests cover the `https://trusted@evil.example` trick. The UI also rejects non-allowlisted hosts before MetaMask opens.
+Hosts are lowercased. Scheme, path, query, fragment, userinfo (`user@host`), port, and a leading `www.` are stripped before allowlist match (same GenLayer-safe algorithm as Multi-Source-Consensus-Oracle). Evidence URLs must be `http://` or `https://` and the normalized host must equal a registered domain. Evidence URL lists must be **distinct** after normalizing scheme + host + path (query/fragment ignored; trailing slashes collapsed) — duplicates cannot pad `min_evidence`. The same gate applies to report, challenge, and unhalt evidence. Direct tests cover the `https://trusted@evil.example` trick and duplicate-URL rejection. The UI also rejects non-allowlisted hosts before MetaMask opens.
+
+Trusted domains must be **ASCII DNS names** (punycode `xn--…` for IDN). **IPv4/IPv6 literals are rejected** at register. Non-ASCII code points are rejected (homoglyphs cannot be registered as Unicode).
+
+### Redirects
+
+Allowlist checks apply to the **submitted** URL only. `gl.nondet.web.render(url, mode="text")` returns page body text and does **not** expose a final post-redirect URL for a second host check. An allowlisted host that HTTP-redirects to a non-allowlisted origin can therefore contribute page content that was never re-validated against the trusted-domain list. Mitigate by only allowlisting origins you control (or that do not open redirects). Contract fetch loops document this limitation next to each `web.render` call.
 
 ## Input caps
 
-Names, definitions, allegations, statements, domains, URLs, action strings, and list counts are bounded on-chain (`DEFINITION_MAX`, `ALLEGATION_MAX`, `MAX_EVIDENCE_URLS`, page limit 50, and similar constants in `contracts/halt_module.py`).
+Names, definitions, allegations, statements, domains, URLs, action strings, and list counts are bounded on-chain (`DEFINITION_MAX`, `ALLEGATION_MAX`, `MAX_EVIDENCE_URLS`, page limit 50, and similar constants in `contracts/halt_module.py`). `is_action_allowed` / `is_protected_action` also reject action strings longer than `ACTION_MAX` (64).
+
+LLM verdict parsing takes the **first balanced `{...}` object** (string-aware), not a greedy `\{.*\}` regex, and rejects leftover second JSON values.
+
+## Indexer address binding
+
+If `HALT_MODULE_ADDRESS` changes after a prior sync, the indexer **wipes** Protocol/Case/CaseEvent rows before continuing so mirrors from two contracts never mix. `GET /api/health` reports `chain.address_match` without exposing RPC URLs or DB exception text.
 
 ## Bonds (full story)
 
@@ -34,7 +46,7 @@ Challenge consensus returns `false_alarm` | `remediated` | `still_active` (not a
 
 ## Appeal window
 
-`halted_at` is recorded on accepted halt. Challenges require `now < halted_at + appeal_window_seconds` (on-chain timestamp). Client clocks cannot bypass this. Window expiry alone never flips the protocol to ACTIVE.
+`halted_at` is recorded on accepted halt using **GenVM wall-clock UTC** (`datetime.now(timezone.utc)` in `_tx_timestamp`). This codebase does not use a GenLayer consensus/block timestamp API (none is wired in the current SDK usage). Challenges require `now < halted_at + appeal_window_seconds` where `now` is also GenVM wall-clock at challenge time. **Client/browser clocks cannot bypass this** — enforcement runs inside the GenVM on-chain, not in the frontend. Window expiry alone never flips the protocol to ACTIVE.
 
 ## Case events / audit
 
@@ -71,7 +83,11 @@ The indexer throttles and retries GenLayer RPC (`-32006` / 429). Beat polls ever
 
 ## Secrets
 
-`.env` and `.env.local` are gitignored. Use `.env.example` files. Rotate `DJANGO_SECRET_KEY` and `SYNC_SHARED_SECRET` if they ever land in git or a screenshot. Contract addresses are public.
+`.env` and `.env.local` are gitignored. Use `.env.example` files. Rotate `DJANGO_SECRET_KEY` and `SYNC_SHARED_SECRET` if they ever land in git or a screenshot. Contract addresses are public. Sync POSTs accept the secret via the `X-Sync-Secret` **header only** (query-string secrets are rejected).
+
+## Redis / Celery broker
+
+Redis must **not** be reachable from the public internet. Local `REDIS_URL=redis://localhost:6379/0` is fine for development. In production use AUTH (and TLS where available), e.g. `redis://:password@host:6379/0` or `rediss://:password@host:6379/0`. Apply the same to `CELERY_BROKER_URL` / `CELERY_RESULT_BACKEND` when overridden.
 
 ## Adversarial review (v1.1)
 
@@ -80,7 +96,7 @@ The indexer throttles and retries GenLayer RPC (`-32006` / 429). Beat polls ever
 | Halt with one fake page on an allowlisted domain? | Yes, if `min_evidence` is 1 and the definition is loose. Mitigate with a stricter definition, higher `min_evidence`, and the reporter bond. Third parties can challenge false alarms. |
 | Governor challenges with a “we patched it” page to steal reporter escrow? | Blocked: authorities cannot call `challenge_halt`; a `remediated` challenge outcome pays the reporter instead of the challenger. |
 | Challenge with “we will patch later” overturns? | Prompt + classification: future patch plans → `still_active` or `remediated`, not `false_alarm`. Direct tests cover false-alarm vs remediated bond paths. |
-| Bypass appeal window with a skewed client clock? | No. Window is enforced on-chain from `halted_at`. |
+| Bypass appeal window with a skewed client clock? | No. Window is enforced in the GenVM from `halted_at` (GenVM wall-clock), not the browser. |
 | Expand trusted domains mid-halt? | No. Policy is immutable; there is no update method. |
 | Rewrite old timeline events via API? | No. Events are append-only on-chain; indexer upserts by id without mutating historical payloads. |
 | `finalize_appeal` early / as unhalt? | Reverts if window still open; never sets ACTIVE. |

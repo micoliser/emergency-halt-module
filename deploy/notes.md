@@ -18,8 +18,8 @@
 
 | Contract | Address | Notes |
 |---|---|---|
-| Halt Module | `0x48cBa3d4Aa763d64749c0A8982241Ce0b4d73e68` | Deploy first |
-| Demo Vault | `0x8753d2576962d4256764883D1F00a60A8B85f44B` | Ctor: Halt Module + protocol id (this vault uses `0`) |
+| Halt Module | `0xcaA299e042651B89860C4a5b474b5Ff6DB21130f` | Deploy first |
+| Demo Vault | `0x96B71926C042d9783fb53d73f84aE1412Ff12748` | Ctor: Halt Module + protocol id (this vault uses `0`) |
 
 ## Deploy order
 

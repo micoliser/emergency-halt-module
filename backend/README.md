@@ -61,6 +61,13 @@ createdb emergency_halt
 redis-server            # or: redis-cli ping  → PONG
 ```
 
+**Redis security:** do not expose Redis on the public internet. Local
+`REDIS_URL=redis://localhost:6379/0` (no password) is fine for development.
+In production use AUTH and prefer TLS, e.g.
+`redis://:password@host:6379/0` or `rediss://:password@host:6379/0`
+(same for `CELERY_BROKER_URL` / `CELERY_RESULT_BACKEND` when set). See
+`docs/SECURITY.md`.
+
 Migrate and serve:
 
 ```bash
@@ -110,7 +117,8 @@ All ids in request paths and responses are **on-chain ids**, not database rows.
 | POST | `/api/sync/all` | Full poll-and-diff pass (seeding / manual refresh) |
 
 `POST` routes require `X-Sync-Secret: <SYNC_SHARED_SECRET>` when that env var
-is set (it is empty by default for local dev).
+is set (header only — query-string secrets are rejected). Empty secret is for
+local `DEBUG=True` only.
 
 ### Pagination envelope
 

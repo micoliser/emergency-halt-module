@@ -36,7 +36,9 @@ else:
 HALT_MODULE_ADDRESS = "0x" + "ab" * 20
 GENLAYER_RPC_THROTTLE_SECONDS = 0.0
 GENLAYER_RPC_MAX_RETRIES = 1
-SYNC_SHARED_SECRET = ""
+# Non-empty so DEBUG=False + empty-secret ImproperlyConfigured path is not
+# hit at import, and sync tests can send a real header.
+SYNC_SHARED_SECRET = "test-sync-secret"
 
 CELERY_TASK_ALWAYS_EAGER = True
 CELERY_BROKER_URL = "memory://"

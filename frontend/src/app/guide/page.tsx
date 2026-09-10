@@ -111,7 +111,12 @@ export default function GuidePage() {
             without waiting on a company admin. ProofHalt’s Halt Module is that
             switch: anyone can post a bonded public report, GenLayer validators
             judge the evidence, and if they agree the exploit is real, your
-            protocol is marked halted.
+            protocol is marked halted. Call{" "}
+            <code className="font-mono text-sm text-ink">is_action_allowed</code>{" "}
+            before those writes. Use{" "}
+            <code className="font-mono text-sm text-ink">is_protected_action</code>{" "}
+            (or the indexed protected list) only as a helper — the halt gate
+            itself is fail-closed on <code className="font-mono text-sm text-ink">allowed_while_halted</code>.
           </p>
           <p className="text-muted">
             You need it because your contract still executes those methods unless you

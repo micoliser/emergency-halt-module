@@ -105,13 +105,14 @@ export interface Paginated<T> {
 
 export interface HealthResponse {
   status: string;
-  database: { ok: boolean; error: string };
+  database: { ok: boolean; error?: string };
   chain: {
-    rpc_url: string;
+    rpc_url?: string;
     chain_id: number;
     halt_module_address: string;
     demo_vault_address: string;
     configured: boolean;
+    address_match?: boolean | null;
   };
   indexed: {
     protocols: number | null;
@@ -123,7 +124,8 @@ export interface HealthResponse {
     case_count: number;
     case_event_count?: number;
     last_success_at: string | null;
-    last_error: string;
+    last_error?: string;
+    has_error?: boolean;
   } | null;
 }
 

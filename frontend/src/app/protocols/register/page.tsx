@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { useAccount } from "wagmi";
 import { TxStatus } from "@/components/TxStatus";
 import { Card, Field, PrimaryButton, TextArea, TextInput } from "@/components/ui";
@@ -10,9 +11,8 @@ import { useHasMounted } from "@/hooks/useHasMounted";
 import { useTransaction } from "@/hooks/useTransaction";
 import { syncProtocol } from "@/lib/api";
 import { contractsConfigured, publicEnv } from "@/lib/env";
-import { csvToList, isEthAddress, parseGen } from "@/lib/format";
+import { csvToList, isEthAddress, parseGen, trustedHostError } from "@/lib/format";
 import { WRITE_METHODS } from "@/lib/genlayer/client";
-import { readProtocolCount } from "@/lib/genlayer/views";
 
 type FormState = {
   name: string;
@@ -71,6 +71,13 @@ export default function RegisterProtocolPage() {
       setLocalError("Add at least one trusted website and one action to freeze.");
       return;
     }
+    for (const domain of domains) {
+      const hostErr = trustedHostError(domain);
+      if (hostErr) {
+        setLocalError(`${hostErr} Check: ${domain}`);
+        return;
+      }
+    }
 
     let bond: bigint;
     try {
@@ -124,25 +131,20 @@ export default function RegisterProtocolPage() {
         confirmedMessage: "Protocol registered and active.",
         syncAll: true,
         onConfirmed: async ({ returnedId }) => {
-          let id = returnedId;
-          if (id == null) {
-            try {
-              const count = await readProtocolCount();
-              id = count > 0 ? count - 1 : null;
-            } catch {
-              id = null;
-            }
-          }
-          if (id == null) {
+          // Prefer the receipt id only — never infer count-1 under concurrency.
+          if (returnedId == null) {
+            toast.message(
+              "Protocol registered. Open Protocols to find it — the receipt did not return an id.",
+            );
             router.push("/protocols");
             return;
           }
           try {
-            await syncProtocol(id);
+            await syncProtocol(returnedId);
           } catch {
             /* ignore */
           }
-          router.push(`/protocols/${id}`);
+          router.push(`/protocols/${returnedId}`);
         },
       },
     );

@@ -131,6 +131,46 @@ export function normalizeHost(urlOrHost: string): string {
   return normalized;
 }
 
+function looksLikeIpv4(host: string): boolean {
+  const parts = host.split(".");
+  if (parts.length !== 4) return false;
+  return parts.every((part) => {
+    if (!/^\d+$/.test(part)) return false;
+    const n = Number(part);
+    return n >= 0 && n <= 255;
+  });
+}
+
+/** Mirror contracts/halt_module.py `_assert_safe_hostname` (client UX only). */
+export function trustedHostError(hostRaw: string): string | null {
+  const host = normalizeHost(hostRaw);
+  if (!host || !host.includes(".")) {
+    return "Trusted domain must be a valid hostname.";
+  }
+  if ([...host].some((c) => c.charCodeAt(0) > 127)) {
+    return "Trusted domain must be ASCII (use punycode xn-- for international domains).";
+  }
+  if (/[ /?#@|\[\]%]/.test(host)) {
+    return "Trusted domain hostname is invalid.";
+  }
+  if (looksLikeIpv4(host)) {
+    return "Trusted domains cannot be IP addresses.";
+  }
+  const labels = host.split(".");
+  if (labels.some((label) => !label)) {
+    return "Trusted domain hostname is invalid.";
+  }
+  for (const label of labels) {
+    if (label.startsWith("-") || label.endsWith("-")) {
+      return "Trusted domain hostname is invalid.";
+    }
+    if (!/^[a-z0-9-]+$/.test(label)) {
+      return "Trusted domain hostname is invalid.";
+    }
+  }
+  return null;
+}
+
 /**
  * Client-side check matching on-chain evidence URL rules.
  * Returns an error message, or null when every URL is allowed.
@@ -150,6 +190,7 @@ export function evidenceUrlsError(
   }
 
   const allowedList = [...trusted].join(", ");
+  const seenKeys = new Set<string>();
   for (const raw of urls) {
     const url = raw.trim();
     if (!url) {
@@ -165,10 +206,41 @@ export function evidenceUrlsError(
     if (!trusted.has(host)) {
       return `“${host}” is not on this protocol’s trusted list (${allowedList}). Host your evidence on an allowed site, then paste that public URL.`;
     }
+    // Mirror contracts/halt_module.py _normalize_evidence_url_key (scheme+host+path).
+    let key = url.toLowerCase();
+    try {
+      const parsed = new URL(url);
+      const path = parsed.pathname.replace(/\/+$/, "") || "/";
+      key = `${parsed.protocol}//${normalizeHost(url)}${path}`;
+    } catch {
+      /* keep lowercased raw */
+    }
+    if (seenKeys.has(key)) {
+      return "Evidence links must be distinct (same page with different query strings still counts as one).";
+    }
+    seenKeys.add(key);
   }
   return null;
 }
 
 export function explorerTxUrl(hash: string): string {
   return `https://explorer-studio.genlayer.com/tx/${hash}`;
+}
+
+/**
+ * Allow only http(s) URLs for use in href. Rejects javascript:, data:, etc.
+ * Returns a normalized href, or null when the URL must not be linked.
+ */
+export function safeExternalUrl(url: string): string | null {
+  const trimmed = url.trim();
+  if (!trimmed) return null;
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return null;
+    }
+    return parsed.href;
+  } catch {
+    return null;
+  }
 }

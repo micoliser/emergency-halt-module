@@ -249,3 +249,25 @@ def test_window_zero_halt_refunds_reporter_immediately(chain):
     assert case.bond_settled is True
     event = CaseEvent.objects.get(case=case)
     assert event.bond_disposition == "REFUND_ACTOR"
+
+
+def test_halt_module_address_change_wipes_indexer_cache(chain):
+    chain.register_protocol()
+    indexer.sync_protocol(0, reader=chain)
+    SyncCursor.load().mark_success(
+        protocol_count=1,
+        case_count=0,
+        case_event_count=0,
+        contract_address=chain.contract_address,
+    )
+    assert Protocol.objects.count() == 1
+
+    chain.contract_address = "0x" + "ef" * 20
+    indexer.ensure_contract_address(chain)
+
+    assert Protocol.objects.count() == 0
+    assert Case.objects.count() == 0
+    assert CaseEvent.objects.count() == 0
+    cursor = SyncCursor.load()
+    assert cursor.contract_address == ""
+    assert cursor.protocol_count == 0

@@ -34,6 +34,46 @@ from apps.sync.models import SyncCursor
 logger = logging.getLogger(__name__)
 
 
+def wipe_indexer_cache(*, reason: str) -> None:
+    """
+    Drop mirrored rows when HALT_MODULE_ADDRESS changes so old and new
+    contracts never mix in Postgres.
+    """
+    logger.warning("wiping indexer cache: %s", reason)
+    with transaction.atomic():
+        CaseEvent.objects.all().delete()
+        Case.objects.all().delete()
+        Protocol.objects.all().delete()
+        cursor = SyncCursor.load()
+        cursor.protocol_count = 0
+        cursor.case_count = 0
+        cursor.case_event_count = 0
+        cursor.contract_address = ""
+        cursor.last_error = ""
+        cursor.save(
+            update_fields=[
+                "protocol_count",
+                "case_count",
+                "case_event_count",
+                "contract_address",
+                "last_error",
+            ]
+        )
+
+
+def ensure_contract_address(reader: HaltModuleReader) -> None:
+    """Refuse mixed mirrors when the configured Halt Module address changes."""
+    addr = (reader.contract_address or "").strip().lower()
+    if not addr:
+        return
+    cursor = SyncCursor.load()
+    stored = (cursor.contract_address or "").strip().lower()
+    if stored and stored != addr:
+        wipe_indexer_cache(
+            reason=f"HALT_MODULE_ADDRESS changed ({stored} → {addr})"
+        )
+
+
 @dataclass
 class SyncReport:
     """What a sync run touched — returned to callers and logged."""
@@ -371,6 +411,7 @@ def _page_limit(limit: int | None = None) -> int:
 def sync_counts(reader: HaltModuleReader | None = None) -> dict:
     """Read the diff anchors and persist them on the cursor."""
     reader = reader or get_reader()
+    ensure_contract_address(reader)
     protocol_count = reader.get_protocol_count()
     case_count = reader.get_case_count()
     case_event_count = reader.get_case_event_count()
@@ -424,6 +465,7 @@ def sync_protocol(
     freshly accepted report shows up as HALTED plus its case detail in one hop.
     """
     reader = reader or get_reader()
+    ensure_contract_address(reader)
     report = SyncReport()
     snapshot = reader.get_protocol(int(protocol_id))
 
@@ -470,6 +512,7 @@ def poll_and_diff(reader: HaltModuleReader | None = None) -> dict:
     (HALTED → ACTIVE on unhalt, case → CLEARED).
     """
     reader = reader or get_reader()
+    ensure_contract_address(reader)
     cursor = SyncCursor.load()
     report = SyncReport()
 

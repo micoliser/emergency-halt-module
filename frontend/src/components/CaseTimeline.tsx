@@ -1,5 +1,5 @@
 import { StatusBadge } from "@/components/StatusBadge";
-import { formatGen, formatTimestamp, shortAddress } from "@/lib/format";
+import { formatGen, formatTimestamp, safeExternalUrl, shortAddress } from "@/lib/format";
 import type { CaseEvent } from "@/lib/types";
 
 const EVENT_LABEL: Record<string, string> = {
@@ -32,18 +32,25 @@ function EvidenceLinks({ urls }: { urls: string[] }) {
   if (!urls.length) return null;
   return (
     <ul className="space-y-1">
-      {urls.map((url) => (
-        <li key={url}>
-          <a
-            href={url}
-            target="_blank"
-            rel="noreferrer"
-            className="break-all text-xs text-accent hover:underline"
-          >
-            {url}
-          </a>
-        </li>
-      ))}
+      {urls.map((url) => {
+        const href = safeExternalUrl(url);
+        return (
+          <li key={url}>
+            {href ? (
+              <a
+                href={href}
+                target="_blank"
+                rel="noreferrer"
+                className="break-all text-xs text-accent hover:underline"
+              >
+                {url}
+              </a>
+            ) : (
+              <span className="break-all text-xs text-muted">{url}</span>
+            )}
+          </li>
+        );
+      })}
     </ul>
   );
 }

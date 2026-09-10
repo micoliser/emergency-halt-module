@@ -1,5 +1,14 @@
 const ALLOWED = new Set(["all"]);
 
+/** Browser clients must send this so classic form CSRF cannot trigger sync. */
+const CSRF_HEADER = "x-requested-with";
+const CSRF_VALUE = "ProofHalt";
+
+/** Simple in-memory rate limit for the sync proxy (per client IP). */
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const RATE_LIMIT_MAX = 30;
+const rateBuckets = new Map<string, { count: number; resetAt: number }>();
+
 function isProtocolsPath(parts: string[]): boolean {
   return parts.length === 2 && parts[0] === "protocols" && /^\d+$/.test(parts[1]);
 }
@@ -12,12 +21,43 @@ function backendBase(): string {
   return raw.replace(/\/$/, "");
 }
 
+function clientIp(request: Request): string {
+  const forwarded = request.headers.get("x-forwarded-for");
+  if (forwarded) return forwarded.split(",")[0]?.trim() || "unknown";
+  return request.headers.get("x-real-ip") || "unknown";
+}
+
+function rateLimitOk(ip: string): boolean {
+  const now = Date.now();
+  const bucket = rateBuckets.get(ip);
+  if (!bucket || now >= bucket.resetAt) {
+    rateBuckets.set(ip, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    return true;
+  }
+  if (bucket.count >= RATE_LIMIT_MAX) return false;
+  bucket.count += 1;
+  return true;
+}
+
 async function proxySync(backendPath: string): Promise<Response> {
   const headers: Record<string, string> = {
     Accept: "application/json",
   };
   const secret = process.env.SYNC_SHARED_SECRET?.trim();
-  if (secret) {
+  const isProd = process.env.NODE_ENV === "production";
+
+  if (!secret) {
+    if (isProd) {
+      return Response.json(
+        {
+          detail:
+            "SYNC_SHARED_SECRET is not configured. Refusing to proxy sync in production.",
+        },
+        { status: 503 },
+      );
+    }
+    // Local DEBUG-style: backend may also allow empty secret when DEBUG=True.
+  } else {
     headers["X-Sync-Secret"] = secret;
   }
 
@@ -44,9 +84,24 @@ async function proxySync(backendPath: string): Promise<Response> {
 }
 
 export async function POST(
-  _request: Request,
+  request: Request,
   context: { params: Promise<{ path: string[] }> },
 ) {
+  const requestedWith = request.headers.get(CSRF_HEADER);
+  if (requestedWith !== CSRF_VALUE) {
+    return Response.json(
+      { detail: `Missing or invalid ${CSRF_HEADER} header.` },
+      { status: 403 },
+    );
+  }
+
+  if (!rateLimitOk(clientIp(request))) {
+    return Response.json(
+      { detail: "Too many sync requests. Try again shortly." },
+      { status: 429 },
+    );
+  }
+
   const { path } = await context.params;
   const parts = (path ?? []).filter(Boolean);
 

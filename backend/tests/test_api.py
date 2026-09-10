@@ -221,11 +221,15 @@ def test_health_reports_config_and_cursor(client, seeded, settings):
 
     assert body["status"] == "ok"
     assert body["database"]["ok"] is True
+    assert "error" not in body["database"]
+    assert "rpc_url" not in body["chain"]
     assert body["chain"]["chain_id"] == settings.GENLAYER_CHAIN_ID
     assert body["chain"]["configured"] is True
     assert body["indexed"] == {"protocols": 2, "cases": 1, "events": 1}
     assert body["cursor"]["protocol_count"] == 2
     assert body["cursor"]["case_count"] == 1
+    assert "last_error" not in body["cursor"]
+    assert "has_error" in body["cursor"]
 
 
 def test_root_lists_routes(client):

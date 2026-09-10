@@ -8,6 +8,7 @@ reads only. It never invents or overrides halt verdicts.
 from pathlib import Path
 
 import dj_database_url
+from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
 from .env import env_bool, env_csv, env_float, env_int, env_str
@@ -104,6 +105,10 @@ REST_FRAMEWORK = {
     "UNAUTHENTICATED_USER": None,
     "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"]
     + (["rest_framework.renderers.BrowsableAPIRenderer"] if DEBUG else []),
+    "DEFAULT_THROTTLE_RATES": {
+        # Caps GenLayer RPC amplification via POST /api/sync/*.
+        "sync": env_str("SYNC_THROTTLE_RATE", "30/min"),
+    },
 }
 
 # Matches the contract's DEFAULT_PAGE_LIMIT / MAX_PAGE_LIMIT so API and chain
@@ -140,10 +145,16 @@ GENLAYER_RPC_TIMEOUT = env_float("GENLAYER_RPC_TIMEOUT", 30.0)
 GENLAYER_RPC_THROTTLE_SECONDS = env_float("GENLAYER_RPC_THROTTLE_SECONDS", 0.25)
 GENLAYER_RPC_MAX_RETRIES = env_int("GENLAYER_RPC_MAX_RETRIES", 3)
 
-# Shared secret for POST /api/sync/* fast-path. Empty => endpoint is open
-# (fine for local dev; set it in any deployed environment).
+# Shared secret for POST /api/sync/* fast-path.
+# Empty is allowed only when DEBUG=True (local). Production must set a strong secret.
 SYNC_SHARED_SECRET = env_str("SYNC_SHARED_SECRET", "")
 SYNC_PAGE_LIMIT = env_int("SYNC_PAGE_LIMIT", 50)
+
+if not DEBUG and not SYNC_SHARED_SECRET:
+    raise ImproperlyConfigured(
+        "SYNC_SHARED_SECRET must be set when DEBUG=False. "
+        "An empty secret leaves POST /api/sync/* open to GenLayer RPC abuse."
+    )
 
 # ---------------------------------------------------------------------------
 # Celery

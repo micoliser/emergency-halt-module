@@ -61,7 +61,9 @@ export default function ProtocolDetailPage() {
   const activeCase = p?.active_case ?? null;
   const windowOpen = now != null && isAppealWindowOpen(p?.appeal_ends_at, now);
   const windowClosed =
-    now != null && p?.appeal_ends_at != null && !isAppealWindowOpen(p.appeal_ends_at, now);
+    now != null &&
+    p?.appeal_ends_at != null &&
+    !isAppealWindowOpen(p.appeal_ends_at, now);
   const canChallenge =
     halted &&
     activeCase?.status === "ACCEPTED_HALT" &&

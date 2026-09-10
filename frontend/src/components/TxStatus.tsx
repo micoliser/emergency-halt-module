@@ -1,5 +1,5 @@
 import type { TxPhase } from "@/hooks/useTransaction";
-import { explorerTxUrl } from "@/lib/format";
+import { explorerTxUrl, safeExternalUrl } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 const LABELS: Record<TxPhase, string> = {
@@ -31,6 +31,7 @@ export function TxStatus({
     reviewing && phase === "SUBMITTED"
       ? "Validators are reviewing evidence… this can take 30–60s."
       : LABELS[phase] || error || "";
+  const explorerHref = txHash ? safeExternalUrl(explorerTxUrl(txHash)) : null;
 
   return (
     <div
@@ -51,15 +52,18 @@ export function TxStatus({
           )}
           {label}
         </p>
-        {txHash && (
+        {txHash && explorerHref && (
           <a
             className="font-mono text-xs underline decoration-line underline-offset-2 hover:text-ink"
-            href={explorerTxUrl(txHash)}
+            href={explorerHref}
             target="_blank"
             rel="noreferrer"
           >
             {txHash.slice(0, 10)}…
           </a>
+        )}
+        {txHash && !explorerHref && (
+          <span className="font-mono text-xs text-muted">{txHash.slice(0, 10)}…</span>
         )}
       </div>
       {error && phase === "FAILED" && <p className="mt-1 text-xs opacity-90">{error}</p>}

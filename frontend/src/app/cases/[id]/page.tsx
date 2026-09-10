@@ -23,6 +23,7 @@ import {
   formatTimestamp,
   isAppealWindowOpen,
   isUnhaltAuthority,
+  safeExternalUrl,
   shortAddress,
 } from "@/lib/format";
 import { WRITE_METHODS } from "@/lib/genlayer/client";
@@ -78,7 +79,9 @@ export default function CaseDetailPage() {
   const halted = p ? p.status === "HALTED" || p.is_halted : c.protocol?.status === "HALTED";
   const windowOpen = now != null && isAppealWindowOpen(p?.appeal_ends_at, now);
   const windowClosed =
-    now != null && p?.appeal_ends_at != null && !isAppealWindowOpen(p.appeal_ends_at, now);
+    now != null &&
+    p?.appeal_ends_at != null &&
+    !isAppealWindowOpen(p.appeal_ends_at, now);
   const isAuthority = isUnhaltAuthority(address, p);
   const canChallenge =
     halted &&
@@ -224,18 +227,25 @@ export default function CaseDetailPage() {
               Report evidence
             </h2>
             <ul className="mt-1 space-y-1">
-              {c.evidence_urls.map((url) => (
-                <li key={url}>
-                  <a
-                    href={url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="break-all text-xs text-accent hover:underline"
-                  >
-                    {url}
-                  </a>
-                </li>
-              ))}
+              {c.evidence_urls.map((url) => {
+                const href = safeExternalUrl(url);
+                return (
+                  <li key={url}>
+                    {href ? (
+                      <a
+                        href={href}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="break-all text-xs text-accent hover:underline"
+                      >
+                        {url}
+                      </a>
+                    ) : (
+                      <span className="break-all text-xs text-muted">{url}</span>
+                    )}
+                  </li>
+                );
+              })}
             </ul>
           </div>
         )}
