@@ -76,7 +76,7 @@ celery -A config beat   -l info      # terminal 3
 ```
 
 Beat enqueues `apps.sync.tasks.poll_and_diff` every
-`SYNC_POLL_INTERVAL_SECONDS` (default 30). Verify the wiring with:
+`SYNC_POLL_INTERVAL_SECONDS` (default 300 / 5 minutes). Verify the wiring with:
 
 ```bash
 celery -A config inspect registered     # lists apps.sync.tasks.*
@@ -231,7 +231,7 @@ exhausted, so the new case detail and timeline land in the same call.
 
 ## How the indexer works
 
-`poll_and_diff` (beat, every 30s):
+`poll_and_diff` (beat, every `SYNC_POLL_INTERVAL_SECONDS`, default 5 minutes):
 
 1. `get_protocol_count()` / `get_case_count()` / `get_case_event_count()` —
    the diff anchors

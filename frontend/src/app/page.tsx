@@ -35,7 +35,7 @@ const PILLARS = [
   {
     kicker: "Skin in the game",
     title: "Bonded reports",
-    body: "One stake size B covers report, challenge, and unhalt. A rejected report pays the owner. A failed challenge pays the reporter. A failed unhalt burns B.",
+    body: "One stake size B covers report, challenge, and unhalt. A rejected report pays the owner. A failed challenge pays the reporter. A remediation-classified challenge also pays the reporter. A failed unhalt burns B.",
   },
   {
     kicker: "Opt-in",
@@ -47,7 +47,7 @@ const PILLARS = [
 const ROLES = [
   {
     who: "Anyone",
-    does: "Report an exploit with a bond and a public evidence URL. Challenge a bad halt while the window is open. Watch the incident timeline.",
+    does: "Report an exploit with a bond and a public evidence URL. Challenge a suspected false alarm while the window is open (owners/backups cannot — they unhalt). Watch the incident timeline.",
   },
   {
     who: "Owner (governor)",
@@ -64,7 +64,7 @@ const DEMO = [
   "Deposit in the Demo Vault, then withdraw once while the protocol is active.",
   "File a bonded report with a public evidence page.",
   "When validators agree, withdrawals freeze. Deposits still work.",
-  "The owner or a named backup posts proof the issue is fixed (or anyone challenges a bad halt). After a yes vote, withdraw works again.",
+  "The owner or a named backup posts proof the issue is fixed (or a third party challenges a false alarm). After a yes vote, withdraw works again.",
 ];
 
 export default function HomePage() {

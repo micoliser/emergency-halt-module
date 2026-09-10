@@ -6,6 +6,7 @@ import { useParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAccount } from "wagmi";
 import { AppealCountdown } from "@/components/AppealCountdown";
+import { BondRiskNotice } from "@/components/BondRiskNotice";
 import { CaseTimeline } from "@/components/CaseTimeline";
 import { StatusBadge } from "@/components/StatusBadge";
 import { TxStatus } from "@/components/TxStatus";
@@ -18,6 +19,7 @@ import { contractsConfigured, publicEnv } from "@/lib/env";
 import {
   bondWei,
   csvToList,
+  evidenceUrlsError,
   formatTimestamp,
   isAppealWindowOpen,
   isUnhaltAuthority,
@@ -79,7 +81,11 @@ export default function CaseDetailPage() {
     now != null && p?.appeal_ends_at != null && !isAppealWindowOpen(p.appeal_ends_at, now);
   const isAuthority = isUnhaltAuthority(address, p);
   const canChallenge =
-    halted && c.status === "ACCEPTED_HALT" && windowOpen && Boolean(p);
+    halted &&
+    c.status === "ACCEPTED_HALT" &&
+    windowOpen &&
+    Boolean(p) &&
+    !isAuthority;
   const canFinalize =
     halted &&
     c.status === "ACCEPTED_HALT" &&
@@ -117,6 +123,11 @@ export default function CaseDetailPage() {
     }
     if (evidence.length < p.min_evidence) {
       setChallengeError(`Add at least ${p.min_evidence} evidence link(s).`);
+      return;
+    }
+    const domainError = evidenceUrlsError(evidence, p.trusted_domains);
+    if (domainError) {
+      setChallengeError(domainError);
       return;
     }
 
@@ -250,6 +261,11 @@ export default function CaseDetailPage() {
                 Challenge halt
               </a>
             )}
+            {isAuthority && windowOpen && c.status === "ACCEPTED_HALT" && (
+              <p className="self-center text-xs text-muted">
+                As owner/backup, use Lift halt — challenge is for third parties only.
+              </p>
+            )}
           </div>
         </Card>
       )}
@@ -266,17 +282,17 @@ export default function CaseDetailPage() {
           <div>
             <h2 className="text-lg font-semibold">Challenge this halt</h2>
             <p className="mt-1 text-sm text-muted">
-              Send exactly {p.reporter_bond_gen} GEN. If validators agree the halt was
-              wrong, the protocol becomes active again. If they disagree, this stake
-              pays the reporter and the halt stands.
+              For third parties who believe the halt was a <strong>false alarm</strong>.
+              Protocol owners and backups must use Lift halt instead.
             </p>
           </div>
+          <BondRiskNotice action="challenge" bondGen={p.reporter_bond_gen} />
           <form className="space-y-4" onSubmit={onChallenge}>
-            <Field label="Why should this halt be overturned?">
+            <Field label="Why was this halt unjustified?">
               <TextArea
                 value={statement}
                 onChange={(e) => setStatement(e.target.value)}
-                placeholder="The evidence does not show an active exploit. The halt should be overturned."
+                placeholder="There was never an active exploit. Vault balances were intact at halt time."
                 maxLength={2000}
                 required
               />

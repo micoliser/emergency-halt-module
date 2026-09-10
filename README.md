@@ -9,9 +9,9 @@ Studionet demo for the GenLayer Agent Tank **Autonomous Protocols** track: a reu
 1. An owner registers a protocol with a safety config (what counts as an exploit, which websites evidence may come from, which actions freeze, reporter bond).
 2. Anyone posts a **bonded** report with public evidence URLs.
 3. Validators fetch those pages and agree on whether an **active exploit** is proven.
-4. If yes: protocol is **HALTED**, bond refunded. If no: stay **ACTIVE**, bond slashed to the owner.
+4. If yes: protocol is **HALTED**, reporter bond escrowed through the appeal window. If no: stay **ACTIVE**, bond slashed to the owner.
 5. Linked contracts (this repo’s Demo Vault) call `is_action_allowed(protocol_id, "withdraw")` and refuse the action while halted.
-6. Only the owner can request an unhalt, with remediation evidence. Validators must agree before **ACTIVE** resumes.
+6. Recovery: third parties may **challenge** a suspected false alarm (governor/backups cannot — they must unhalt). Challenges are classified as `false_alarm`, `remediated`, or `still_active`. Owners/backups **unhalt** with remediation evidence anytime while halted.
 
 Halt gate: **ACTIVE** allows every action. **HALTED** is fail-closed (only listed exceptions; unknown names are denied).
 
@@ -19,8 +19,8 @@ Halt gate: **ACTIVE** allows every action. **HALTED** is fail-closed (only liste
 
 | Contract | Address |
 |---|---|
-| Halt Module | `0x125431c66F877424Dd4db6315fC30079C933B124` |
-| Demo Vault | `0x7d27628a35171c9DE6F6684252a3e2500A7E856D` |
+| Halt Module | `0x48cBa3d4Aa763d64749c0A8982241Ce0b4d73e68` |
+| Demo Vault | `0x8753d2576962d4256764883D1F00a60A8B85f44B` |
 
 - RPC: `https://studio.genlayer.com/api`
 - Chain id: `61999`
@@ -33,13 +33,15 @@ The Demo Vault is constructed with `(halt_module, protocol_id)`. Registering a n
 
 | On-chain (deterministic) | AI-judged (nondeterministic) |
 |---|---|
-| Registration, exact bond, status, `is_action_allowed`, vault balances | Whether fetched **page content** proves an active exploit or a successful remediation |
+| Registration, unified bond `B`, escrow/settlement, status machine, appeal deadline, unhalt auth set, event append, `is_action_allowed`, vault balances | Whether fetched **page content** proves an active exploit, a false alarm, or successful remediation |
 
-This is **not** a cryptographic exploit detector. Validators read allowlisted web pages with an LLM. A weak definition, a captured trusted host, or a convincing fake page can still produce a halt. Bonds, host allowlists, and the unhalt vote are the brakes, not omniscience.
+This is **not** a cryptographic exploit detector. Validators read allowlisted web pages with an LLM. A weak definition, a captured trusted host, or a convincing fake page can still produce a halt. Bonds, host allowlists, challenge classification, and the unhalt vote are the brakes, not omniscience.
 
-**Fail-closed garbage:** if the leader output is missing, not JSON, or lacks a boolean `exploit` / `remediated`, the transaction reverts. The protocol does **not** halt on unparseable model output.
+**Bond story:** Every decision that moves halt state is bonded at one size `B` set by the governor. False reports pay the governor. After a halt, the reporter’s bond is escrowed through the appeal window. A failed challenge pays the reporter; a successful **false-alarm** challenge takes the reporter’s escrow. A challenge classified as **remediated** pays the reporter (same as unhalt). To unhalt, an authority posts the same bond: if remediation passes, that bond pays the reporter and the escrow returns; if it fails, the unhalt bond is burned and the protocol stays frozen. Window expiry never auto-unhalts.
 
-**Governor risk:** whoever registers a protocol chooses trusted domains. Registering `attacker.example` and posting a fake page is a self-grief of *that* protocol, not of others.
+**Fail-closed garbage:** if the leader output is missing, not JSON, or lacks a required decision (`exploit` / `remediated` / challenge `outcome`), the transaction reverts. The protocol does **not** halt on unparseable model output.
+
+**Governor risk:** whoever registers a protocol chooses trusted domains. Registering `attacker.example` and posting a fake page is a self-grief of *that* protocol, not of others. Governors and backups cannot use the challenge path to dodge paying a true reporter.
 
 **Studionet only.** This project does not target localnet or mainnet.
 
@@ -48,7 +50,10 @@ More: [docs/architecture.md](docs/architecture.md), [docs/SECURITY.md](docs/SECU
 ## Known limitations
 
 - AI judges page text on owner-allowlisted domains, not on-chain traces or bytecode diffs.
-- One convincing page on an allowlisted host can halt if `min_evidence` is 1 and the definition is loose (mitigate with a stricter definition, higher `min_evidence`, and the reporter bond). Challenge / overturn is not in v1.
+- One convincing page on an allowlisted host can halt if `min_evidence` is 1 and the definition is loose (mitigate with a stricter definition, higher `min_evidence`, and the reporter bond). Challenges classify false alarm vs remediation so a later patch cannot steal a true reporter’s escrow.
+- Failed unhalt **burns** `B` even if remediation was real but the model disagreed — retries cost `B` each.
+- Backup unhalters are a trust assumption (extra recovery keys that must hold `B` to unhalt).
+- Live evidence URLs may change after the fact; the audit record is the stored consensus summary + inputs, not a permanent mirror of the web.
 - Evidence URLs must be publicly fetchable. `localhost` will not work.
 - The Halt Module never seizes a contract that does not call `is_action_allowed`.
 - Indexer and UI are caches and wallets. The contracts are the source of truth.

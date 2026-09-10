@@ -9,11 +9,23 @@ const EVENT_LABEL: Record<string, string> = {
   APPEAL_FINALIZED: "Appeal finalized",
 };
 
-function consensusVerb(eventType: string): string {
+function consensusVerb(eventType: string, toStatus?: string): string {
   if (eventType === "REPORT_EVALUATED") return "Exploit";
-  if (eventType === "CHALLENGE_EVALUATED") return "Overturn";
+  if (eventType === "CHALLENGE_EVALUATED") {
+    if (toStatus === "OVERTURNED") return "False alarm";
+    if (toStatus === "CLEARED") return "Remediated";
+    return "Still active";
+  }
   if (eventType === "UNHALT_EVALUATED") return "Remediated";
   return "Consensus";
+}
+
+function consensusYesNo(eventType: string, value: boolean, toStatus?: string): string {
+  if (eventType === "CHALLENGE_EVALUATED") {
+    if (toStatus === "OVERTURNED" || toStatus === "CLEARED") return "yes";
+    return "no";
+  }
+  return value ? "yes" : "no";
 }
 
 function EvidenceLinks({ urls }: { urls: string[] }) {
@@ -72,9 +84,13 @@ export function CaseTimeline({ events }: { events: CaseEvent[] }) {
             <EvidenceLinks urls={event.evidence_urls ?? []} />
             {event.event_type !== "APPEAL_FINALIZED" && event.consensus_bool != null && (
               <p className="text-sm">
-                {consensusVerb(event.event_type)}:{" "}
+                {consensusVerb(event.event_type, event.to_status)}:{" "}
                 <span className="font-medium">
-                  {event.consensus_bool ? "yes" : "no"}
+                  {consensusYesNo(
+                    event.event_type,
+                    event.consensus_bool,
+                    event.to_status,
+                  )}
                 </span>
               </p>
             )}

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAccount } from "wagmi";
+import { BondRiskNotice } from "@/components/BondRiskNotice";
 import { StatusBadge } from "@/components/StatusBadge";
 import { TxStatus } from "@/components/TxStatus";
 import { Card, Field, PrimaryButton, TextArea } from "@/components/ui";
@@ -12,7 +13,7 @@ import { useHasMounted } from "@/hooks/useHasMounted";
 import { useTransaction } from "@/hooks/useTransaction";
 import { getProtocol } from "@/lib/api";
 import { contractsConfigured, publicEnv } from "@/lib/env";
-import { bondWei, csvToList, isUnhaltAuthority } from "@/lib/format";
+import { bondWei, csvToList, evidenceUrlsError, isUnhaltAuthority } from "@/lib/format";
 import { WRITE_METHODS } from "@/lib/genlayer/client";
 
 export default function UnhaltPage() {
@@ -61,6 +62,15 @@ export default function UnhaltPage() {
       setLocalError("Describe the fix and add at least one evidence link.");
       return;
     }
+    if (evidence.length < p.min_evidence) {
+      setLocalError(`Add at least ${p.min_evidence} evidence link(s).`);
+      return;
+    }
+    const domainError = evidenceUrlsError(evidence, p.trusted_domains);
+    if (domainError) {
+      setLocalError(domainError);
+      return;
+    }
 
     let value: bigint;
     try {
@@ -102,11 +112,8 @@ export default function UnhaltPage() {
       <div>
         <h1 className="text-2xl font-semibold">Lift the halt</h1>
         <p className="text-sm text-muted">
-          The owner or a named backup can do this. You must send exactly stake B
-          ({p?.reporter_bond_gen ?? "?"} GEN). Validators must agree the exploit is
-          fixed. If they disagree, this transaction still completes and{" "}
-          <strong className="text-ink">burns</strong> that bond — the protocol stays
-          halted.
+          For the owner or a named backup after the issue is fixed. This is a bonded
+          action — see the stake warning below before you submit.
         </p>
       </div>
 
@@ -123,6 +130,8 @@ export default function UnhaltPage() {
           <StatusBadge status={p.status} />
         </Card>
       )}
+
+      {p && <BondRiskNotice action="unhalt" bondGen={p.reporter_bond_gen} />}
 
       <Card>
         <form className="space-y-4" onSubmit={onSubmit}>

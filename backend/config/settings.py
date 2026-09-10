@@ -159,7 +159,7 @@ CELERY_TASK_SOFT_TIME_LIMIT = env_int("CELERY_TASK_SOFT_TIME_LIMIT", 240)
 CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
 
 # Beat cadence for the poll-and-diff indexer.
-SYNC_POLL_INTERVAL_SECONDS = env_int("SYNC_POLL_INTERVAL_SECONDS", 30)
+SYNC_POLL_INTERVAL_SECONDS = env_int("SYNC_POLL_INTERVAL_SECONDS", 300)
 
 # ---------------------------------------------------------------------------
 # Logging

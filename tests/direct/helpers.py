@@ -250,15 +250,46 @@ def mock_remediated_false(vm, summary: str = "Exploit still active") -> None:
 
 
 def mock_overturn_true(vm, summary: str = "Halt was unjustified; no active exploit") -> None:
-    vm.clear_mocks()
-    vm.mock_web(r".*", {"status": 200, "body": "False alarm: no active exploit matching definition"})
-    vm.mock_llm(r".*", json.dumps({"overturn": True, "summary": summary}))
+    """False-alarm challenge outcome (legacy name kept for call sites)."""
+    mock_challenge_false_alarm(vm, summary=summary)
 
 
 def mock_overturn_false(vm, summary: str = "Exploit still active; halt stands") -> None:
+    """Still-active challenge outcome (legacy name kept for call sites)."""
+    mock_challenge_still_active(vm, summary=summary)
+
+
+def mock_challenge_false_alarm(
+    vm, summary: str = "Halt was unjustified; no active exploit"
+) -> None:
+    vm.clear_mocks()
+    vm.mock_web(r".*", {"status": 200, "body": "False alarm: no active exploit matching definition"})
+    vm.mock_llm(
+        r".*",
+        json.dumps({"outcome": "false_alarm", "summary": summary}),
+    )
+
+
+def mock_challenge_remediated(
+    vm, summary: str = "Exploit was real but is now patched"
+) -> None:
+    vm.clear_mocks()
+    vm.mock_web(r".*", {"status": 200, "body": "Remediation complete; exploit closed"})
+    vm.mock_llm(
+        r".*",
+        json.dumps({"outcome": "remediated", "summary": summary}),
+    )
+
+
+def mock_challenge_still_active(
+    vm, summary: str = "Exploit still active; halt stands"
+) -> None:
     vm.clear_mocks()
     vm.mock_web(r".*", {"status": 200, "body": "Active exploit still draining funds"})
-    vm.mock_llm(r".*", json.dumps({"overturn": False, "summary": summary}))
+    vm.mock_llm(
+        r".*",
+        json.dumps({"outcome": "still_active", "summary": summary}),
+    )
 
 
 def set_tx_timestamp(monkeypatch, timestamp: int, contract=None) -> None:

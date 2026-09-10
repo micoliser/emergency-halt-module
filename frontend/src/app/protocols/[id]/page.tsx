@@ -23,15 +23,10 @@ import { WRITE_METHODS } from "@/lib/genlayer/client";
 import { ApiError } from "@/lib/types";
 import { useState } from "react";
 
-function humanActionList(actions: string[]): string {
+function actionList(actions: string[]): string {
   if (!actions.length) return "none";
   return actions
-    .map((a) => {
-      if (a === "withdraw") return "withdraw money";
-      if (a === "transfer") return "transfer funds";
-      if (a === "deposit") return "deposit";
-      return a;
-    })
+    .map((a) => a.replace("_", " "))
     .join(", ");
 }
 
@@ -68,7 +63,10 @@ export default function ProtocolDetailPage() {
   const windowClosed =
     now != null && p?.appeal_ends_at != null && !isAppealWindowOpen(p.appeal_ends_at, now);
   const canChallenge =
-    halted && activeCase?.status === "ACCEPTED_HALT" && windowOpen;
+    halted &&
+    activeCase?.status === "ACCEPTED_HALT" &&
+    windowOpen &&
+    !isAuthority;
   const canFinalize =
     halted &&
     activeCase?.status === "ACCEPTED_HALT" &&
@@ -217,15 +215,20 @@ export default function ProtocolDetailPage() {
       {halted && (
         <Card className="border-halted/40 space-y-3">
           <p className="text-sm">
-            This protocol is <strong>halted</strong>. Linked apps like the Demo Vault
-            will not let people withdraw until the owner or a backup lifts the halt
-            with proof that the issue is fixed.
+            This protocol is <strong>halted</strong>. Some actions are frozen while halted. 
           </p>
           <AppealCountdown appealEndsAt={p.appeal_ends_at} />
           {canChallenge && (
             <p className="text-sm text-muted">
-              Anyone can challenge this halt with stake {p.reporter_bond_gen} GEN
-              while the window is open.
+              Third parties can challenge a suspected false alarm with stake{" "}
+              {p.reporter_bond_gen} GEN while the window is open. Owners and backups
+              must lift the halt instead.
+            </p>
+          )}
+          {halted && isAuthority && windowOpen && (
+            <p className="text-sm text-muted">
+              As owner/backup you cannot challenge — use Lift halt with remediation
+              evidence (that path pays the reporter when successful).
             </p>
           )}
           {canFinalize && (
@@ -234,10 +237,6 @@ export default function ProtocolDetailPage() {
               bond without unhalting.
             </p>
           )}
-          <p className="text-sm text-muted">
-            Deposits into the Demo Vault can still work during a halt — only taking money
-            out is frozen.
-          </p>
           <div className="flex flex-wrap gap-3">
             {p.active_case_id > 0 && (
               <Link
@@ -247,9 +246,6 @@ export default function ProtocolDetailPage() {
                 Open incident timeline →
               </Link>
             )}
-            <Link href="/vault" className="text-sm text-accent hover:underline">
-              Open Demo Vault →
-            </Link>
           </div>
         </Card>
       )}
@@ -282,17 +278,16 @@ export default function ProtocolDetailPage() {
             <dt className="text-muted">Trusted websites</dt>
             <dd>{p.trusted_domains.join(", ") || "—"}</dd>
             <dt className="text-muted">Actions frozen when halted</dt>
-            <dd>{humanActionList(p.protected_actions)}</dd>
+            <dd>{actionList(p.protected_actions)}</dd>
             <dt className="text-muted">Exceptions while halted</dt>
             <dd>
               {p.allowed_while_halted.length
-                ? humanActionList(p.allowed_while_halted)
+                ? actionList(p.allowed_while_halted)
                 : "None — frozen actions stay blocked"}
             </dd>
           </dl>
           <p className="text-xs text-muted">
-            “Exceptions while halted” only applies to the frozen actions above. The Demo
-            Vault does not freeze deposits, so you can still add funds during a halt.
+            “Exceptions while halted” only applies to the frozen actions above.
           </p>
         </Card>
         <Card className="space-y-3 text-sm">

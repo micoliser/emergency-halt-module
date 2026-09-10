@@ -10,6 +10,7 @@ from helpers import (
     DEFAULT_BOND,
     TRUSTED_DOMAIN,
     address_hex,
+    mock_challenge_remediated,
     mock_exploit_false,
     mock_exploit_true,
     mock_overturn_false,
@@ -888,6 +889,7 @@ def test_challenge_success_in_window(halt_module, direct_vm, direct_accounts):
     assert challenge_event["bond_disposition"] == "SLASH_CHALLENGER|REFUND_ACTOR"
     assert int(challenge_event["bond_amount"]) == DEFAULT_BOND
     assert challenge_event["actor"].lower() == address_hex(challenger).lower()
+    assert challenge_event["consensus_summary"].startswith("[false_alarm]")
 
     mock_overturn_true(direct_vm)
     direct_vm.sender = challenger
@@ -901,8 +903,112 @@ def test_challenge_success_in_window(halt_module, direct_vm, direct_accounts):
     assert "halted" in str(exc.value).lower()
 
 
+def test_challenge_remediated_pays_reporter(halt_module, direct_vm, direct_accounts):
+    """Remediation-via-challenge → CLEARED; challenger B + escrow → reporter."""
+    contract = halt_module
+    governor = direct_accounts[0]
+    reporter = direct_accounts[1]
+    challenger = direct_accounts[2]
+    direct_vm.sender = governor
+    register_default_protocol(contract)
+
+    _halt_default(contract, direct_vm, reporter)
+    assert contract.get_case(1)["bond_settled"] is False
+
+    mock_challenge_remediated(direct_vm)
+    direct_vm.sender = challenger
+    direct_vm.value = DEFAULT_BOND
+    ok = contract.challenge_halt(
+        0,
+        "The exploit was real but is patched now",
+        json.dumps([f"https://{TRUSTED_DOMAIN}/patched"]),
+    )
+    assert ok is True
+
+    protocol = contract.get_protocol(0)
+    assert protocol["status"] == "ACTIVE"
+    assert protocol["active_case_id"] == 0
+    assert int(protocol["halted_at"]) == 0
+    assert contract.is_action_allowed(0, "withdraw") is True
+
+    case = contract.get_case(1)
+    assert case["status"] == "CLEARED"
+    assert case["bond_settled"] is True
+
+    events = contract.list_case_events(1, 0, 10)
+    assert len(events) == 2
+    challenge_event = events[1]
+    assert challenge_event["event_type"] == "CHALLENGE_EVALUATED"
+    assert challenge_event["consensus_bool"] is True
+    assert challenge_event["to_status"] == "CLEARED"
+    assert challenge_event["bond_disposition"] == "PAY_REPORTER|REFUND_REPORTER"
+    assert challenge_event["consensus_summary"].startswith("[remediated]")
+    assert "SLASH_CHALLENGER" not in challenge_event["bond_disposition"]
+
+
+def test_governor_cannot_challenge(halt_module, direct_vm, direct_accounts):
+    """Governor must use request_unhalt, not challenge_halt."""
+    contract = halt_module
+    governor = direct_accounts[0]
+    reporter = direct_accounts[1]
+    direct_vm.sender = governor
+    register_default_protocol(contract)
+    _halt_default(contract, direct_vm, reporter)
+
+    mock_overturn_true(direct_vm)
+    direct_vm.sender = governor
+    direct_vm.value = DEFAULT_BOND
+    with pytest.raises(Exception) as exc:
+        contract.challenge_halt(
+            0,
+            "Fake overturn as governor",
+            json.dumps([f"https://{TRUSTED_DOMAIN}/overturn"]),
+        )
+    msg = str(exc.value).lower()
+    assert "request_unhalt" in msg or "governor" in msg or "backup" in msg
+    assert contract.get_protocol(0)["status"] == "HALTED"
+    assert contract.get_case(1)["status"] == "ACCEPTED_HALT"
+
+
+def test_backup_cannot_challenge(halt_module, direct_vm, direct_accounts):
+    """Backup unhalters must use request_unhalt, not challenge_halt."""
+    contract = halt_module
+    governor = direct_accounts[0]
+    reporter = direct_accounts[1]
+    backup = direct_accounts[2]
+    challenger = direct_accounts[3]
+    direct_vm.sender = governor
+    register_default_protocol(contract, backup_unhalters=[backup])
+    _halt_default(contract, direct_vm, reporter)
+
+    mock_overturn_true(direct_vm)
+    direct_vm.sender = backup
+    direct_vm.value = DEFAULT_BOND
+    with pytest.raises(Exception) as exc:
+        contract.challenge_halt(
+            0,
+            "Fake overturn as backup",
+            json.dumps([f"https://{TRUSTED_DOMAIN}/overturn"]),
+        )
+    msg = str(exc.value).lower()
+    assert "request_unhalt" in msg or "governor" in msg or "backup" in msg
+    assert contract.get_protocol(0)["status"] == "HALTED"
+
+    # Non-authority challenger still allowed.
+    mock_overturn_true(direct_vm)
+    direct_vm.sender = challenger
+    direct_vm.value = DEFAULT_BOND
+    ok = contract.challenge_halt(
+        0,
+        "True false alarm",
+        json.dumps([f"https://{TRUSTED_DOMAIN}/overturn"]),
+    )
+    assert ok is True
+    assert contract.get_protocol(0)["status"] == "ACTIVE"
+
+
 def test_challenge_fail_pays_reporter(halt_module, direct_vm, direct_accounts):
-    """T9: overturn=false → still HALTED; challenger B → reporter, not governor."""
+    """T9: still_active → still HALTED; challenger B → reporter, not governor."""
     contract = halt_module
     governor = direct_accounts[0]
     reporter = direct_accounts[1]
@@ -941,6 +1047,7 @@ def test_challenge_fail_pays_reporter(halt_module, direct_vm, direct_accounts):
     assert "SLASH_GOVERNOR" not in challenge_event["bond_disposition"]
     assert int(challenge_event["bond_amount"]) == DEFAULT_BOND
     assert challenge_event["to_status"] == "ACCEPTED_HALT"
+    assert challenge_event["consensus_summary"].startswith("[still_active]")
 
 
 def test_challenge_after_window_reverts(

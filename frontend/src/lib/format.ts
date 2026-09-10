@@ -107,6 +107,68 @@ export function csvToList(raw: string): string[] {
     .filter(Boolean);
 }
 
+/**
+ * Mirror contracts/halt_module.py `_normalize_host` for allowlist matching.
+ * Lowercases; strips scheme, path/query/fragment, userinfo, port, leading www.
+ */
+export function normalizeHost(urlOrHost: string): string {
+  let normalized = urlOrHost.trim().toLowerCase();
+  if (normalized.includes("://")) {
+    normalized = normalized.split("://", 2)[1] ?? normalized;
+  }
+  for (const char of ["/", "?", "#"] as const) {
+    normalized = normalized.split(char, 2)[0] ?? normalized;
+  }
+  if (normalized.includes("@")) {
+    normalized = normalized.split("@").pop() ?? normalized;
+  }
+  if (normalized.includes(":")) {
+    normalized = normalized.split(":", 2)[0] ?? normalized;
+  }
+  if (normalized.startsWith("www.")) {
+    normalized = normalized.slice(4);
+  }
+  return normalized;
+}
+
+/**
+ * Client-side check matching on-chain evidence URL rules.
+ * Returns an error message, or null when every URL is allowed.
+ */
+export function evidenceUrlsError(
+  urls: string[],
+  trustedDomains: string[] | null | undefined,
+): string | null {
+  if (!urls.length) {
+    return "Add at least one evidence link.";
+  }
+  const trusted = new Set(
+    (trustedDomains ?? []).map((d) => normalizeHost(d)).filter(Boolean),
+  );
+  if (trusted.size === 0) {
+    return "This protocol has no trusted websites configured.";
+  }
+
+  const allowedList = [...trusted].join(", ");
+  for (const raw of urls) {
+    const url = raw.trim();
+    if (!url) {
+      return "Evidence links must be non-empty.";
+    }
+    if (!/^https?:\/\//i.test(url)) {
+      return `Evidence links must start with http:// or https://. Check: ${url}`;
+    }
+    const host = normalizeHost(url);
+    if (!host) {
+      return `Could not read the website from: ${url}`;
+    }
+    if (!trusted.has(host)) {
+      return `“${host}” is not on this protocol’s trusted list (${allowedList}). Host your evidence on an allowed site, then paste that public URL.`;
+    }
+  }
+  return null;
+}
+
 export function explorerTxUrl(hash: string): string {
   return `https://explorer-studio.genlayer.com/tx/${hash}`;
 }

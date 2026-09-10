@@ -18,34 +18,36 @@
 
 | Contract | Address | Notes |
 |---|---|---|
-| Halt Module | `0x125431c66F877424Dd4db6315fC30079C933B124` | Deploy first |
-| Demo Vault | `0x7d27628a35171c9DE6F6684252a3e2500A7E856D` | Ctor: Halt Module + protocol id (this vault uses `0`) |
+| Halt Module | `0x48cBa3d4Aa763d64749c0A8982241Ce0b4d73e68` | Deploy first |
+| Demo Vault | `0x8753d2576962d4256764883D1F00a60A8B85f44B` | Ctor: Halt Module + protocol id (this vault uses `0`) |
 
 ## Deploy order
 
 1. Deploy `contracts/halt_module.py` (fail-closed halt gate).
-2. As governor, `register_protocol(...)` with `protected_actions` including `"withdraw"` and `allowed_while_halted` as `[]` (or `["deposit"]` if you want deposits explicitly allowlisted — vault does not gate deposits either way).
+2. As governor, `register_protocol(...)` with `protected_actions` including `"withdraw"`, `allowed_while_halted` as `[]`, and `backup_unhalters_json` (0–3 addresses for path B).
 3. Note the returned **protocol_id** (first register → `0`).
 4. Deploy `contracts/demo_vault.py` with constructor args `(halt_module_address, protocol_id)`.
-5. Smoke: deposit → withdraw (ACTIVE) → `report_exploit` → withdraw fails → unhalt → withdraw works.
-6. Update backend + frontend env vars (Phases 4–5).
-7. Run indexer sync / health check (Phase 4).
+5. Smoke: deposit → withdraw (ACTIVE) → `report_exploit` → withdraw fails → challenge **or** unhalt → withdraw works.
+6. Update backend + frontend env vars; wipe indexer DB if replacing a prior Halt Module address.
+7. Run indexer sync / health check.
 
 ### Studio register args (vault demo)
 
 | Arg | Example |
 |---|---|
 | `name` | `Demo Vault Protocol` |
-| `exploit_definition` | `Halt if evidence shows an active drain of user funds.` |
+| `exploit_definition` | `Halt if the evidence page states that an active exploit or ongoing drain of user funds is currently occurring against this protocol…` |
 | `trusted_domains_json` | `["rentry.co"]` (must match evidence URL host) |
 | `protected_actions_json` | `["withdraw","transfer"]` |
 | `allowed_while_halted_json` | `[]` |
-| `reporter_bond` | `1000000000000000000` (1 GEN in wei) |
+| `reporter_bond` | `5000000000000000000` (5 GEN in wei) — this is stake `B` for report, challenge, and unhalt |
 | `min_evidence` | `1` |
-| `appeal_window_seconds` | `86400` |
+| `appeal_window_seconds` | `600` (demo) or `86400` |
+| `backup_unhalters_json` | `["0x…"]` (0–3; optional but needed for backup unhalt demo) |
 
 Vault ctor: paste the Halt Module address + `0` (or the protocol id you registered).
 
+Cold-path steps: [docs/demo_script.md](../docs/demo_script.md). Video outline: [docs/demo_video_outline.md](../docs/demo_video_outline.md).
 ## Hosting (later phases)
 
 | Service | Host | URL |
@@ -84,7 +86,7 @@ Three process types — **all three**, or nothing polls the chain (see
 | `GENLAYER_READER_ADDRESS` | `0x1111…1111` | `from` on read-only `gen_call`; needs no funds |
 | `GENLAYER_RPC_THROTTLE_SECONDS` | `0.25` | Rate-limit shield (`-32006` / 429) |
 | `SYNC_SHARED_SECRET` | _random_ | Required header `X-Sync-Secret` on `POST /api/sync/*` |
-| `SYNC_POLL_INTERVAL_SECONDS` | `30` | Beat cadence |
+| `SYNC_POLL_INTERVAL_SECONDS` | `300` | Beat cadence (5 minutes; keeps GenLayer RPC usage low) |
 | `API_MAX_PAGE_SIZE` | `50` | Must match contract `MAX_PAGE_LIMIT` |
 
 ### Post-deploy seed + check

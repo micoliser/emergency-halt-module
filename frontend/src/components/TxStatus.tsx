@@ -26,14 +26,19 @@ export function TxStatus({
   if (phase === "IDLE" && !error) return null;
 
   const busy = phase === "CONFIRMING" || phase === "SUBMITTED" || phase === "SYNCING";
+  const failed = phase === "FAILED" || (phase === "IDLE" && Boolean(error));
+  const label =
+    reviewing && phase === "SUBMITTED"
+      ? "Validators are reviewing evidence… this can take 30–60s."
+      : LABELS[phase] || error || "";
 
   return (
     <div
-      role="status"
-      aria-live="polite"
+      role={failed ? "alert" : "status"}
+      aria-live={failed ? "assertive" : "polite"}
       className={cn(
         "rounded-sm border px-3 py-2 text-sm",
-        phase === "FAILED" && "border-halted/40 bg-halted/10 text-halted",
+        failed && "border-halted/50 bg-halted/15 text-halted",
         phase === "CONFIRMED" && "border-active/40 bg-active/10 text-active",
         phase === "UNDETERMINED" && "border-warn/40 bg-warn/10 text-warn",
         busy && "border-warn/40 bg-warn/10 text-warn",
@@ -44,9 +49,7 @@ export function TxStatus({
           {busy && (
             <span className="mr-2 inline-block h-2 w-2 animate-pulse rounded-full bg-warn" />
           )}
-          {reviewing && phase === "SUBMITTED"
-            ? "Validators are reviewing evidence… this can take 30–60s."
-            : LABELS[phase] || error}
+          {label}
         </p>
         {txHash && (
           <a

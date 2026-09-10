@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAccount } from "wagmi";
+import { BondRiskNotice } from "@/components/BondRiskNotice";
 import { StatusBadge } from "@/components/StatusBadge";
 import { TxStatus } from "@/components/TxStatus";
 import { Card, Field, PrimaryButton, TextArea } from "@/components/ui";
@@ -12,7 +13,7 @@ import { useHasMounted } from "@/hooks/useHasMounted";
 import { useTransaction } from "@/hooks/useTransaction";
 import { getProtocol } from "@/lib/api";
 import { contractsConfigured, publicEnv } from "@/lib/env";
-import { csvToList } from "@/lib/format";
+import { csvToList, evidenceUrlsError } from "@/lib/format";
 import { WRITE_METHODS } from "@/lib/genlayer/client";
 
 export default function ReportExploitPage() {
@@ -60,6 +61,11 @@ export default function ReportExploitPage() {
       setLocalError(`Add at least ${p.min_evidence} evidence link(s).`);
       return;
     }
+    const domainError = evidenceUrlsError(evidence, p.trusted_domains);
+    if (domainError) {
+      setLocalError(domainError);
+      return;
+    }
 
     let bond: bigint;
     try {
@@ -101,9 +107,9 @@ export default function ReportExploitPage() {
       <div>
         <h1 className="text-2xl font-semibold">Report an exploit</h1>
         <p className="text-sm text-muted">
-          You must send exactly the report bond (stake B). If validators agree there
-          is an active exploit, the protocol halts and your bond is escrowed through
-          the challenge window. If they disagree, the bond goes to the protocol owner.
+          Post public evidence that an active exploit is happening. Validators
+          decide. This is a bonded action — see the stake warning below before you
+          submit.
         </p>
       </div>
 
@@ -120,6 +126,8 @@ export default function ReportExploitPage() {
           <StatusBadge status={p.status} />
         </Card>
       )}
+
+      {p && <BondRiskNotice action="report" bondGen={p.reporter_bond_gen} />}
 
       <Card>
         <form className="space-y-4" onSubmit={onSubmit}>

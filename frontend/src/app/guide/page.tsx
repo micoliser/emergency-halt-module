@@ -321,8 +321,13 @@ export default function GuidePage() {
             </li>
             <li>
               Anyone can <code className="font-mono">challenge_halt</code> while the
-              appeal window is open. A successful challenge overturns the halt; a
-              failed challenge pays the reporter.
+              appeal window is open — except the governor and backup unhalters, who
+              must use <code className="font-mono">request_unhalt</code>. Validators
+              classify the challenge as <code className="font-mono">false_alarm</code>{" "}
+              (reporter escrow → challenger), <code className="font-mono">remediated</code>{" "}
+              (challenger stake → reporter, same as a successful unhalt), or{" "}
+              <code className="font-mono">still_active</code> (challenger stake →
+              reporter; halt stands).
             </li>
             <li>
               The governor or a backup unhalter can{" "}
