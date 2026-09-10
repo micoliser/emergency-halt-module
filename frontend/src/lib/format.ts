@@ -132,13 +132,16 @@ export function normalizeHost(urlOrHost: string): string {
 }
 
 function looksLikeIpv4(host: string): boolean {
+  // Mirror contracts/halt_module.py `_looks_like_ipv4`: four all-digit labels
+  // count as an IPv4 attempt even when an octet is >255 or has a leading zero.
   const parts = host.split(".");
   if (parts.length !== 4) return false;
-  return parts.every((part) => {
+  for (const part of parts) {
     if (!/^\d+$/.test(part)) return false;
-    const n = Number(part);
-    return n >= 0 && n <= 255;
-  });
+    if (part.length > 1 && part.startsWith("0")) return true;
+    if (Number(part) > 255) return true;
+  }
+  return true;
 }
 
 /** Mirror contracts/halt_module.py `_assert_safe_hostname` (client UX only). */
